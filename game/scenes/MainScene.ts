@@ -23,18 +23,12 @@ export default class MainScene extends Phaser.Scene {
   }
 
   preload() {
-    // 1. Load Custom SVG Vectors from public directory
+    // 1. Load Custom SVG Vectors from the public directory
     this.load.svg('head', '/head.svg', { width: 40, height: 40 });
     this.load.svg('body', '/body.svg', { width: 30, height: 30 });
     this.load.svg('food', '/orb.svg', { width: 30, height: 30 });
     
-    // 2. Load background image asset
-    this.load.image('bg', '/hex-bg.jpg');
-
-    // 3. Audio Asset Pipeline Hooks
-    // Un-comment these lines as soon as you drop matching mp3s into public/ folder
-    // this.load.audio('bgMusic', '/bgMusic.mp3');
-    // this.load.audio('eatSound', '/gulp.mp3');
+    // Notice: We are no longer loading hex-bg.jpg here!
   }
 
   init(data: { walletAddress: string }) {
@@ -42,18 +36,27 @@ export default class MainScene extends Phaser.Scene {
   }
 
   create() {
-    // Render the tileable sci-fi arena backdrop
-    this.add.tileSprite(400, 300, 800, 600, 'bg').setAlpha(0.25);
+    // 1. Generate a procedural grid background automatically
+    const gridGraphics = this.add.graphics();
+    gridGraphics.lineStyle(1, 0x22c55e, 0.15); // Thin, subtle neon green lines
 
-    // Audio Trigger Init
-    // if (this.sound.get('bgMusic') === null) {
-    //   this.sound.play('bgMusic', { loop: true, volume: 0.3 });
-    // }
+    const gridSize = 40;
+    const mapWidth = 800;
+    const mapHeight = 600;
 
-    // Render the authoritative token food orb
+    // Draw vertical grid lines
+    for (let x = 0; x <= mapWidth; x += gridSize) {
+      gridGraphics.lineBetween(x, 0, x, mapHeight);
+    }
+    // Draw horizontal grid lines
+    for (let y = 0; y <= mapHeight; y += gridSize) {
+      gridGraphics.lineBetween(0, y, mapWidth, y);
+    }
+
+    // 2. Render the authoritative token food orb
     this.food = this.add.image(-100, -100, 'food');
 
-    // Establish dynamic WebSocket bridge with Render engine
+    // 3. Establish dynamic WebSocket bridge with Render engine
     this.socket = io('https://snake-royale-backend.onrender.com');
 
     // Register room entry lifecycle event
@@ -100,12 +103,9 @@ export default class MainScene extends Phaser.Scene {
       }
     });
 
-    // Handle growth events and audio responses
+    // Handle growth events
     this.socket.on('playerScoreUpdate', (playerInfo: any) => {
       if (playerInfo.id === this.socket.id) {
-        // Trigger local fx crunch audio
-        // this.sound.play('eatSound', { volume: 0.6 });
-        
         // Append physical SVG body link to segment map
         const newSegment = this.add.image(-100, -100, 'body');
         this.bodySegments.push(newSegment);
@@ -114,7 +114,7 @@ export default class MainScene extends Phaser.Scene {
 
     // Handle game completion signal 
     this.socket.on('gameOver', (data: { winnerWallet: string }) => {
-      this.physics.pause();
+      this.scene.pause(); // Cleanly freeze the engine loop without crashing
       const statusText = data.winnerWallet === this.walletAddress ? "VICTORY!" : "GAME OVER";
       
       this.add.text(400, 300, statusText, {
