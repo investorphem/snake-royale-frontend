@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import ProfileSidebar from "@/components/ProfileSidebar";
 import FeatureGrid from "@/components/FeatureGrid";
 import MobileNav from "@/components/MobileNav";
+import Shop from "@/components/Shop"; // NEW: Shop Import
 
 // 1. Initialize Thirdweb Client & Celo Sepolia Chain Matrix
 const client = createThirdwebClient({ 
@@ -125,112 +126,142 @@ function SnakeRoyaleApp() {
       {/* DASHBOARD CONTAINER MATRIX */}
       <div className="pt-24 pb-24 px-4 lg:px-8 max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
         
-        {/* LEFT COMPONENT COLUMN */}
+        {/* LEFT COMPONENT COLUMN (MAIN VIEW) */}
         <div className="lg:col-span-8 flex flex-col gap-6">
           
-          {appState === 'playing' ? (
-            <div className="w-full aspect-video bg-black rounded-3xl overflow-hidden border border-[#22c55e]/30 shadow-[0_0_30px_rgba(34,197,94,0.15)] relative">
-              <PhaserGame walletAddress={account?.address} />
-              <button 
-                onClick={() => setAppState('menu')}
-                className="absolute top-4 left-4 bg-black/50 hover:bg-black/80 text-white px-4 py-2 rounded-full backdrop-blur-sm transition-all border border-white/10"
-              >
-                ← Disconnect Arena
-              </button>
-            </div>
-          ) : (
-            <div className="w-full flex flex-col items-center justify-center py-12 lg:py-20 bg-gradient-to-b from-[#111722] to-[#0B0F17] rounded-3xl border border-white/5 relative overflow-hidden px-6">
-              
-              {appState === 'menu' && (
-                <div className="w-full flex flex-col items-center animate-fade-in text-center">
-                  <h1 className="text-5xl lg:text-7xl font-black italic text-transparent bg-clip-text bg-gradient-to-b from-[#bef264] to-[#22c55e] drop-shadow-lg mb-2">
-                    CELO SNAKE
-                  </h1>
-                  <h2 className="text-3xl lg:text-4xl font-black text-yellow-500 tracking-widest mb-6">
-                    •• ROYALE ••
-                  </h2>
-                  <p className="text-gray-400 font-semibold tracking-widest mb-10">EAT. GROW. MULTIPLY ASSETS.</p>
-                  
-                  <div className="flex flex-col gap-4 w-full max-w-sm">
-                    <button 
-                      onClick={() => setAppState('playing')}
-                      className="w-full py-4 rounded-xl font-bold text-lg bg-gray-800 hover:bg-gray-700 text-white border border-white/10 transition-all"
-                    >
-                      🎮 FREE PRACTICE MODE
-                    </button>
+          {/* --- TAB ROUTING LOGIC --- */}
 
-                    <div className="relative flex py-2 items-center w-full">
-                      <div className="flex-grow border-t border-white/5"></div>
-                      <span className="flex-shrink-0 mx-4 text-gray-500 text-xs font-black tracking-widest">ESCROW ARENAS</span>
-                      <div className="flex-grow border-t border-white/5"></div>
-                    </div>
+          {activeTab === 'shop' && <Shop />}
 
-                    {!account ? (
-                      <p className="text-sm text-gray-500 font-semibold">Connect wallet to unlock on-chain wagers</p>
-                    ) : (
-                      <>
-                        <button 
-                          onClick={() => setAppState('create')}
-                          className="w-full py-4 rounded-xl font-bold text-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_rgba(79,70,229,0.2)] transition-all"
-                        >
-                          ➕ HOST NEW WAGER
-                        </button>
-                        <button 
-                          onClick={() => setAppState('join')}
-                          className="w-full py-4 rounded-xl font-bold text-lg bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(34,197,94,0.2)] transition-all"
-                        >
-                          ⚔️ ENTER ACTIVE WAGER
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {appState === 'create' && (
-                <div className="w-full max-w-md flex flex-col animate-fade-in">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-black tracking-wide">Host Wager Configuration</h3>
-                    <button onClick={() => setAppState('menu')} className="text-gray-500 hover:text-white">✕</button>
-                  </div>
-                  
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Room Index Identifier</label>
-                  <input type="number" value={roomIdInput} onChange={e => setRoomIdInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-4 outline-none focus:border-indigo-500 font-mono" />
-
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Target Pool Entry Fee (cUSD)</label>
-                  <input type="number" value={feeInput} onChange={e => setFeeInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-8 outline-none focus:border-indigo-500 font-mono" />
-
-                  <button onClick={handleCreateRoom} disabled={!!txStatus} className="w-full py-4 rounded-xl font-black text-lg bg-indigo-600 hover:bg-indigo-500 transition-all disabled:bg-gray-800 disabled:text-gray-500">
-                    {txStatus || 'PUBLISH ESCROW APPARATUS'}
-                  </button>
-                </div>
-              )}
-
-              {appState === 'join' && (
-                <div className="w-full max-w-md flex flex-col animate-fade-in">
-                  <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-black tracking-wide">Enter Arena Room</h3>
-                    <button onClick={() => setAppState('menu')} className="text-gray-500 hover:text-white">✕</button>
-                  </div>
-                  
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Target Room ID</label>
-                  <input type="number" value={roomIdInput} onChange={e => setRoomIdInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-4 outline-none focus:border-green-500 font-mono" />
-
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Verify Admission Staking Requirement (cUSD)</label>
-                  <input type="number" value={feeInput} onChange={e => setFeeInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-8 outline-none focus:border-green-500 font-mono" />
-
-                  <button onClick={handleJoinRoom} disabled={!!txStatus} className="w-full py-4 rounded-xl font-black text-lg bg-green-600 hover:bg-green-500 transition-all disabled:bg-gray-800 disabled:text-gray-500">
-                    {txStatus || 'AUTHORIZE VALUATION & DEPLOY'}
-                  </button>
-                </div>
-              )}
-
+          {activeTab === 'inventory' && (
+            <div className="w-full flex flex-col items-center justify-center py-24 bg-[#111722] rounded-3xl border border-white/5 animate-fade-in">
+              <span className="text-6xl mb-4">🎒</span>
+              <h2 className="text-2xl font-black text-white mb-2 tracking-widest">INVENTORY</h2>
+              <p className="text-gray-500 font-semibold">Your cryptographic assets will appear here soon.</p>
             </div>
           )}
 
-          {/* BOTTOM FEATURE CARDS MATRIX */}
-          <FeatureGrid />
+          {activeTab === 'clans' && (
+            <div className="w-full flex flex-col items-center justify-center py-24 bg-[#111722] rounded-3xl border border-white/5 animate-fade-in">
+              <span className="text-6xl mb-4">🛡️</span>
+              <h2 className="text-2xl font-black text-white mb-2 tracking-widest">SYNDICATE CLANS</h2>
+              <p className="text-gray-500 font-semibold">Clan formation protocols are currently offline.</p>
+            </div>
+          )}
 
+          {activeTab === 'profile' && (
+            <div className="block lg:hidden h-full animate-fade-in">
+              <ProfileSidebar accountAddress={account?.address} />
+            </div>
+          )}
+          
+          {activeTab === 'home' && (
+            <>
+              {appState === 'playing' ? (
+                <div className="w-full aspect-video bg-black rounded-3xl overflow-hidden border border-[#22c55e]/30 shadow-[0_0_30px_rgba(34,197,94,0.15)] relative">
+                  <PhaserGame walletAddress={account?.address} />
+                  <button 
+                    onClick={() => setAppState('menu')}
+                    className="absolute top-4 left-4 bg-black/50 hover:bg-black/80 text-white px-4 py-2 rounded-full backdrop-blur-sm transition-all border border-white/10"
+                  >
+                    ← Disconnect Arena
+                  </button>
+                </div>
+              ) : (
+                <div className="w-full flex flex-col items-center justify-center py-12 lg:py-20 bg-gradient-to-b from-[#111722] to-[#0B0F17] rounded-3xl border border-white/5 relative overflow-hidden px-6">
+                  
+                  {appState === 'menu' && (
+                    <div className="w-full flex flex-col items-center animate-fade-in text-center">
+                      <h1 className="text-5xl lg:text-7xl font-black italic text-transparent bg-clip-text bg-gradient-to-b from-[#bef264] to-[#22c55e] drop-shadow-lg mb-2">
+                        CELO SNAKE
+                      </h1>
+                      <h2 className="text-3xl lg:text-4xl font-black text-yellow-500 tracking-widest mb-6">
+                        •• ROYALE ••
+                      </h2>
+                      <p className="text-gray-400 font-semibold tracking-widest mb-10">EAT. GROW. MULTIPLY ASSETS.</p>
+                      
+                      <div className="flex flex-col gap-4 w-full max-w-sm">
+                        <button 
+                          onClick={() => setAppState('playing')}
+                          className="w-full py-4 rounded-xl font-bold text-lg bg-gray-800 hover:bg-gray-700 text-white border border-white/10 transition-all"
+                        >
+                          🎮 FREE PRACTICE MODE
+                        </button>
+
+                        <div className="relative flex py-2 items-center w-full">
+                          <div className="flex-grow border-t border-white/5"></div>
+                          <span className="flex-shrink-0 mx-4 text-gray-500 text-xs font-black tracking-widest">ESCROW ARENAS</span>
+                          <div className="flex-grow border-t border-white/5"></div>
+                        </div>
+
+                        {!account ? (
+                          <p className="text-sm text-gray-500 font-semibold">Connect wallet to unlock on-chain wagers</p>
+                        ) : (
+                          <>
+                            <button 
+                              onClick={() => setAppState('create')}
+                              className="w-full py-4 rounded-xl font-bold text-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_rgba(79,70,229,0.2)] transition-all"
+                            >
+                              ➕ HOST NEW WAGER
+                            </button>
+                            <button 
+                              onClick={() => setAppState('join')}
+                              className="w-full py-4 rounded-xl font-bold text-lg bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(34,197,94,0.2)] transition-all"
+                            >
+                              ⚔️ ENTER ACTIVE WAGER
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {appState === 'create' && (
+                    <div className="w-full max-w-md flex flex-col animate-fade-in">
+                      <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-black tracking-wide">Host Wager Configuration</h3>
+                        <button onClick={() => setAppState('menu')} className="text-gray-500 hover:text-white">✕</button>
+                      </div>
+                      
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Room Index Identifier</label>
+                      <input type="number" value={roomIdInput} onChange={e => setRoomIdInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-4 outline-none focus:border-indigo-500 font-mono" />
+
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Target Pool Entry Fee (cUSD)</label>
+                      <input type="number" value={feeInput} onChange={e => setFeeInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-8 outline-none focus:border-indigo-500 font-mono" />
+
+                      <button onClick={handleCreateRoom} disabled={!!txStatus} className="w-full py-4 rounded-xl font-black text-lg bg-indigo-600 hover:bg-indigo-500 transition-all disabled:bg-gray-800 disabled:text-gray-500">
+                        {txStatus || 'PUBLISH ESCROW APPARATUS'}
+                      </button>
+                    </div>
+                  )}
+
+                  {appState === 'join' && (
+                    <div className="w-full max-w-md flex flex-col animate-fade-in">
+                      <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-black tracking-wide">Enter Arena Room</h3>
+                        <button onClick={() => setAppState('menu')} className="text-gray-500 hover:text-white">✕</button>
+                      </div>
+                      
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Target Room ID</label>
+                      <input type="number" value={roomIdInput} onChange={e => setRoomIdInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-4 outline-none focus:border-green-500 font-mono" />
+
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Verify Admission Staking Requirement (cUSD)</label>
+                      <input type="number" value={feeInput} onChange={e => setFeeInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-8 outline-none focus:border-green-500 font-mono" />
+
+                      <button onClick={handleJoinRoom} disabled={!!txStatus} className="w-full py-4 rounded-xl font-black text-lg bg-green-600 hover:bg-green-500 transition-all disabled:bg-gray-800 disabled:text-gray-500">
+                        {txStatus || 'AUTHORIZE VALUATION & DEPLOY'}
+                      </button>
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+              {/* BOTTOM FEATURE CARDS MATRIX */}
+              {appState !== 'playing' && <FeatureGrid />}
+
+            </>
+          )}
         </div>
 
         {/* RIGHT COLUMN: LINKED SIDEBAR HOOK (HIDDEN ON MOBILE) */}
