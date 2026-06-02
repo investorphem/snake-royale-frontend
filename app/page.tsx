@@ -5,7 +5,7 @@ import { ThirdwebProvider, ConnectButton, useActiveAccount } from "thirdweb/reac
 import { createThirdwebClient, defineChain } from "thirdweb";
 import dynamic from 'next/dynamic';
 
-const client = createThirdwebClient({ clientId: "YOUR_THIRDWEB_CLIENT_ID" });
+const client = createThirdwebClient({ clientId: "3yd744Q5LPJ3BC1ndknBd0JLotNiKe4Dy-x2aqYEXKfNkzBLo3kXQL-5u0P3aMOX17uEdwClXg_FRKf_RSe09w" });
 const celoSepolia = defineChain(11142220); 
 
 const PhaserGame = dynamic(() => import('@/components/PhaserGame'), { ssr: false });
