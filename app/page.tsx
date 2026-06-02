@@ -434,4 +434,7 @@ function TokenBadge({ token, accountAddress }: { token: any, accountAddress: str
   return (
     <div className="bg-[#0B0F17] border border-white/5 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-[0_0_10px_rgba(255,255,255,0.02)]">
        <span className="text-white font-black text-sm">{formattedBalance}</span>
-       <span className={`${token.color} text-[10px] font-black uppercase tracking-widest`}>{token
+       <span className={`${token.color} text-[10px] font-black uppercase tracking-widest`}>{token.symbol}</span>
+    </div>
+  );
+}
