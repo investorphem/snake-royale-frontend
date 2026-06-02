@@ -326,7 +326,7 @@ function MiniPayNav() {
   const { connect } = useConnect();
 
   useEffect(() => {
-    if (!account && typeof window !== "undefined" && window.ethereum) {
+    if (!account && typeof window !== "undefined" && (window as any).ethereum) {
       connect(createWallet("injected"));
     }
   }, [account, connect]);
