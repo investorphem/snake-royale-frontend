@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
-import { ThirdwebProvider, useActiveAccount, useConnect, useReadContract } from "thirdweb/react";
+import { ThirdwebProvider, ConnectButton, useActiveAccount, useConnect, useReadContract } from "thirdweb/react";
 import { createThirdwebClient, defineChain, prepareContractCall, sendTransaction, waitForReceipt, getContract, readContract } from "thirdweb";
 import { createWallet } from "thirdweb/wallets";
 import dynamic from 'next/dynamic';
@@ -145,6 +145,37 @@ function SnakeRoyaleApp() {
     }
   };
 
+  // --- DATABASE TELEMETRY SYNC ---
+  const handleGameOver = async (finalScore: number) => {
+    if (!account?.address) return;
+    try {
+      const { supabase } = await import("@/lib/supabaseClient");
+      const lowerAddress = account.address.toLowerCase();
+
+      // 1. Fetch current stats
+      const { data: player } = await supabase
+        .from('players')
+        .select('xp, games_played')
+        .eq('wallet_address', lowerAddress)
+        .single();
+
+      if (player) {
+        // 2. Update with new game data
+        await supabase
+          .from('players')
+          .update({
+            xp: (player.xp || 0) + finalScore,
+            games_played: (player.games_played || 0) + 1
+          })
+          .eq('wallet_address', lowerAddress);
+        
+        console.log(`Saved ${finalScore} XP to global profile!`);
+      }
+    } catch (error) {
+      console.error("Failed to sync match data:", error);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#06090E] text-white font-sans overflow-x-hidden selection:bg-[#84cc16] selection:text-black">
       
@@ -180,7 +211,8 @@ function SnakeRoyaleApp() {
             <>
               {appState === 'playing' ? (
                 <div className="w-full aspect-video bg-black rounded-3xl overflow-hidden border border-[#22c55e]/30 shadow-[0_0_30px_rgba(34,197,94,0.15)] relative">
-                  <PhaserGame walletAddress={account?.address} />
+                  {/* INJECTED THE onGameOver PROP HERE */}
+                  <PhaserGame walletAddress={account?.address} onGameOver={handleGameOver} />
                   <button 
                     onClick={() => setAppState('menu')}
                     className="absolute top-4 left-4 bg-black/50 hover:bg-black/80 text-white px-4 py-2 rounded-full backdrop-blur-sm transition-all border border-white/10"
@@ -324,12 +356,19 @@ function SnakeRoyaleApp() {
 function MiniPayNav() {
   const account = useActiveAccount();
   const { connect } = useConnect();
+  const [isMobileWallet, setIsMobileWallet] = useState(true);
 
   useEffect(() => {
-    if (!account && typeof window !== "undefined" && (window as any).ethereum) {
-      connect(createWallet("injected" as any));
-    }
-  }, [account, connect]);
+    const checkWallet = setTimeout(() => {
+      if (typeof window !== "undefined" && (window as any).ethereum) {
+        connect(createWallet("injected" as any)).catch(console.error);
+      } else {
+        setIsMobileWallet(false);
+      }
+    }, 1000);
+
+    return () => clearTimeout(checkWallet);
+  }, [connect]);
 
   useEffect(() => {
     const onboardPlayer = async () => {
@@ -349,7 +388,13 @@ function MiniPayNav() {
     onboardPlayer();
   }, [account?.address]);
 
-  if (!account) return <div className="text-xs text-gray-500 font-bold animate-pulse">Initializing...</div>;
+  if (!account) {
+    return isMobileWallet ? (
+      <div className="text-xs text-gray-500 font-bold animate-pulse">Initializing...</div>
+    ) : (
+      <ConnectButton client={client} chain={mainnetChain} theme={"dark"} />
+    );
+  }
 
   return (
     <div className="flex gap-2 flex-wrap justify-end">

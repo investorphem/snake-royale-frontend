@@ -21,7 +21,7 @@ export default function Inventory() {
   // Real stats pulled from DB
   const [stats, setStats] = useState({
     xp: 0,
-    gamesPlayed: 0, // Placeholder until match_history table is fully utilized
+    gamesPlayed: 0, 
     wins: 0
   });
 
@@ -33,16 +33,21 @@ export default function Inventory() {
       setIsLoading(true);
 
       try {
-        // 1. Fetch Player Profile (for XP and currently equipped skin)
+        // 1. Fetch Player Profile (for XP, equipped skin, and match history)
         const { data: player } = await supabase
           .from('players')
-          .select('xp, current_skin_id')
+          .select('xp, current_skin_id, games_played, wins')
           .eq('wallet_address', lowerAddress)
           .single();
 
         if (player) {
           setEquippedSkin(player.current_skin_id || 'classic');
-          setStats(prev => ({ ...prev, xp: player.xp }));
+          // Dynamically set stats from the database columns
+          setStats({
+            xp: player.xp || 0,
+            gamesPlayed: player.games_played || 0,
+            wins: player.wins || 0
+          });
         }
 
         // 2. Fetch Owned Inventory Items
