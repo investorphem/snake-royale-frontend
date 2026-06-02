@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🐍👑 Snake Royale: Celo MiniPay Edition
 
-## Getting Started
+**A real-time, multiplayer wager arena natively optimized for the Celo MiniPay and Valora ecosystems.** Snake Royale bridges the gap between high-performance WebGL gaming and decentralized finance. By utilizing a hybrid on-chain/off-chain architecture, players can seamlessly wager stablecoins (cUSD, USDC, USDT) in skill-based combat without leaving their mobile wallets.
 
-First, run the development server:
+## 🌟 The Vision & Ecosystem Pivot
+The Celo ecosystem is rich with utility and payment applications. To avoid market saturation and ecosystem duplication, Snake Royale was engineered to introduce **gamified liquidity**. By providing a high-stakes, hyper-casual gaming experience directly inside MiniPay, we create a new, engaging utility vector for stablecoins on the network.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 Core Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+* **Zero-Friction Onboarding:** Silent auto-connection via injected `window.ethereum` providers. Players open the app inside MiniPay and immediately see their stablecoin balances without manual wallet linking.
+* **Trustless Escrow Arenas:** Wagers are locked in a custom Solidity Smart Contract on the Celo network. The winner takes the pool; the blockchain guarantees the payout.
+* **Hybrid Telemetry Backend:** Game state, player loadouts (NFT skins), and the Syndicate Clans DAO leaderboards are powered by a real-time PostgreSQL (Supabase) database to ensure zero-latency UI updates, keeping the blockchain reserved strictly for financial settlements.
+* **Dynamic Matchmaking:** The frontend actively queries the Celo network to index and display live, un-settled wager rooms for instant matchmaking.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file
+## 🛠 Technical Architecture
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+* **Frontend:** Next.js (App Router), React, Tailwind CSS
+* **Game Engine:** Phaser.js (WebGL)
+* **Web3 Integration:** Thirdweb SDK (Targeting Celo Sepolia & Celo Mainnet)
+* **Off-Chain Database:** Supabase (PostgreSQL)
 
-## Learn More
+## 📱 Mobile-First Design
+The application is strictly constrained via viewport meta-tagging and responsive Tailwind layouts to feel like a native iOS/Android application when launched from within the MiniPay browser. The layout features a sticky bottom navigation dock and touch-optimized virtual joysticks for flawless mobile combat.
 
-To learn more about Next.js, take a look at the following resources:
+## 🛡️ Syndicate DAOs (Clans)
+Players can pool resources, establish Syndicates, and climb the global leaderboard based on total accumulated power and wager yield, setting the stage for massive future Clan Wars.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+*Built by Oluwafemi Mobolaji Olagoke for the Celo Ecosystem.*
