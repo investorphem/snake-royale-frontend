@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { ThirdwebProvider, useActiveAccount, useConnect, useReadContract } from "thirdweb/react";
-import { createThirdwebClient, defineChain, prepareContractCall, sendTransaction, waitForReceipt, getContract } from "thirdweb";
+import { createThirdwebClient, defineChain, prepareContractCall, sendTransaction, waitForReceipt, getContract, readContract } from "thirdweb";
 import { createWallet } from "thirdweb/wallets";
 import dynamic from 'next/dynamic';
 import ProfileSidebar from "@/components/ProfileSidebar";
@@ -17,11 +17,9 @@ const client = createThirdwebClient({
   clientId: "3yd744Q5LPJ3BC1ndknBd0JLotNiKe4Dy-x2aqYEXKfNkzBLo3kXQL-5u0P3aMOX17uEdwClXg_FRKf_RSe09w" 
 }); 
 
-// 2. Chain Definitions
-const celoSepolia = defineChain(11142220); // Used for your current testnet smart contract
-const celoMainnet = defineChain(42220);    // Used for reading live MiniPay balances
+const celoSepolia = defineChain(11142220); 
+const celoMainnet = defineChain(42220);    
 
-// 3. MiniPay Mainnet Stablecoin Addresses
 const STABLECOINS = [
   { symbol: "USDm", address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", decimals: 18, color: "text-green-400" },
   { symbol: "USDC", address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", decimals: 6, color: "text-blue-400" },
@@ -47,14 +45,53 @@ export default function Home() {
 function SnakeRoyaleApp() {
   const account = useActiveAccount();
   
-  // App Navigation States
   const [appState, setAppState] = useState<'menu' | 'create' | 'join' | 'playing'>('menu');
   const [activeTab, setActiveTab] = useState<'home' | 'shop' | 'inventory' | 'clans' | 'profile'>('home');
   const [txStatus, setTxStatus] = useState('');
   
-  // Custom user input configurations
   const [roomIdInput, setRoomIdInput] = useState('1');
   const [feeInput, setFeeInput] = useState('1');
+
+  // --- NEW: DYNAMIC ON-CHAIN LOBBY STATE ---
+  const [activeRooms, setActiveRooms] = useState<any[]>([]);
+  const [isFetchingRooms, setIsFetchingRooms] = useState(false);
+
+  // Fetch the 10 most recent rooms from the smart contract mapping
+  const fetchLiveRooms = async () => {
+    setIsFetchingRooms(true);
+    const roomsFound = [];
+    
+    // In production, an indexer like a Dune Dashboard or a Subgraph is faster, 
+    // but a quick loop works perfectly for reading active EVM mappings on load.
+    for (let i = 1; i <= 10; i++) {
+      try {
+        const roomData = await readContract({
+          contract: wagerContract,
+          method: "function rooms(uint256) view returns (uint256 roomId, uint256 entryFee, address winner, bool isSettled, bool isActive)",
+          params: [BigInt(i)]
+        });
+        
+        // If isActive is true (index 4 in the return tuple)
+        if (roomData[4] === true) {
+          roomsFound.push({
+            roomId: Number(roomData[0]),
+            entryFee: (Number(roomData[1]) / 1e18).toFixed(2) // Convert from Wei to cUSD formatting
+          });
+        }
+      } catch (error) {
+        console.error(`Room ${i} not found or error parsing.`);
+      }
+    }
+    setActiveRooms(roomsFound);
+    setIsFetchingRooms(false);
+  };
+
+  // Trigger the fetch when the user opens the "Join" menu
+  useEffect(() => {
+    if (appState === 'join') {
+      fetchLiveRooms();
+    }
+  }, [appState]);
 
   // --- ESCROW TRANSACTION LOGIC ---
   const handleCreateRoom = async () => {
@@ -83,12 +120,13 @@ function SnakeRoyaleApp() {
     }
   };
 
-  const handleJoinRoom = async () => {
+  // We now accept the fee directly from the dynamically selected room
+  const handleJoinRoom = async (selectedRoomId: string, requiredFeeInCUSD: string) => {
     if (!account) return;
     try {
-      setTxStatus('Approving Vault Allocation...');
-      const feeInWei = BigInt(parseFloat(feeInput) * 1e18); 
-      const roomId = BigInt(roomIdInput);
+      setTxStatus(`Approving Vault Allocation for Room ${selectedRoomId}...`);
+      const feeInWei = BigInt(parseFloat(requiredFeeInCUSD) * 1e18); 
+      const roomId = BigInt(selectedRoomId);
 
       const approveTx = prepareContractCall({
         contract: cUSDContract,
@@ -130,23 +168,18 @@ function SnakeRoyaleApp() {
            </span>
         </div>
         
-        {/* NEW MINIPAY AUTO-CONNECT NAVBAR */}
         <div className="flex items-center gap-4">
           <MiniPayNav />
         </div>
       </nav>
 
-      {/* DASHBOARD CONTAINER MATRIX */}
       <div className="pt-24 pb-24 px-4 lg:px-8 max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
         
-        {/* LEFT COMPONENT COLUMN (MAIN VIEW) */}
         <div className="lg:col-span-8 flex flex-col gap-6">
           
-          {/* --- TAB ROUTING LOGIC --- */}
           {activeTab === 'shop' && <Shop />}
           {activeTab === 'inventory' && <Inventory />}
           {activeTab === 'clans' && <Clans />}
-
           {activeTab === 'profile' && (
             <div className="block lg:hidden h-full animate-fade-in">
               <ProfileSidebar accountAddress={account?.address} />
@@ -193,7 +226,7 @@ function SnakeRoyaleApp() {
                         </div>
 
                         {!account ? (
-                          <p className="text-sm text-gray-500 font-semibold">Connecting to MiniPay...</p>
+                          <p className="text-sm text-gray-500 font-semibold">Connecting to Wallet...</p>
                         ) : (
                           <>
                             <button 
@@ -233,68 +266,88 @@ function SnakeRoyaleApp() {
                     </div>
                   )}
 
+                  {/* DYNAMIC JOIN ROOM LOBBY */}
                   {appState === 'join' && (
                     <div className="w-full max-w-md flex flex-col animate-fade-in">
                       <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-xl font-black tracking-wide">Enter Arena Room</h3>
-                        <button onClick={() => setAppState('menu')} className="text-gray-500 hover:text-white">✕</button>
+                        <h3 className="text-xl font-black tracking-wide">Live Wager Arenas</h3>
+                        <button onClick={() => setAppState('menu')} className="text-gray-500 hover:text-white text-lg">✕</button>
                       </div>
-                      
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Target Room ID</label>
-                      <input type="number" value={roomIdInput} onChange={e => setRoomIdInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-4 outline-none focus:border-green-500 font-mono" />
 
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Verify Admission Staking Requirement (cUSD)</label>
-                      <input type="number" value={feeInput} onChange={e => setFeeInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-8 outline-none focus:border-green-500 font-mono" />
+                      {txStatus && (
+                        <div className="w-full bg-green-500/10 border border-green-500/30 text-green-400 p-4 rounded-xl mb-4 text-center font-bold animate-pulse">
+                          {txStatus}
+                        </div>
+                      )}
 
-                      <button onClick={handleJoinRoom} disabled={!!txStatus} className="w-full py-4 rounded-xl font-black text-lg bg-green-600 hover:bg-green-500 transition-all disabled:bg-gray-800 disabled:text-gray-500">
-                        {txStatus || 'AUTHORIZE VALUATION & DEPLOY'}
-                      </button>
+                      {isFetchingRooms ? (
+                        <div className="text-center py-10 text-gray-500 font-semibold animate-pulse">
+                          Scanning Blockchain for active rooms...
+                        </div>
+                      ) : activeRooms.length === 0 ? (
+                        <div className="text-center py-10 bg-[#0B0F17] rounded-xl border border-white/5">
+                          <p className="text-gray-400 font-bold mb-2">No Active Rooms Found</p>
+                          <p className="text-xs text-gray-600 mb-4">Be the first to host a match on-chain.</p>
+                          <button onClick={() => setAppState('create')} className="text-indigo-400 text-sm font-bold hover:underline">
+                            Host a new wager →
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select an Arena to Join</p>
+                          {activeRooms.map((room) => (
+                            <div key={room.roomId} className="bg-[#0B0F17] border border-white/10 rounded-xl p-4 flex justify-between items-center group hover:border-green-500/50 transition-all">
+                              <div>
+                                <h4 className="font-bold text-white">Room #{room.roomId}</h4>
+                                <p className="text-xs text-gray-500">Awaiting Challengers</p>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <span className="font-black text-green-400">{room.entryFee} cUSD</span>
+                                <button 
+                                  onClick={() => handleJoinRoom(room.roomId.toString(), room.entryFee)}
+                                  disabled={!!txStatus}
+                                  className="bg-green-600 hover:bg-green-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all disabled:bg-gray-800 disabled:text-gray-500"
+                                >
+                                  ENTER
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 
                 </div>
               )}
-
-              {/* BOTTOM FEATURE CARDS MATRIX */}
               {appState !== 'playing' && <FeatureGrid />}
-
             </>
           )}
         </div>
 
-        {/* RIGHT COLUMN: LINKED SIDEBAR HOOK (HIDDEN ON MOBILE) */}
         <div className="hidden lg:flex lg:col-span-4 flex-col gap-6">
           <ProfileSidebar accountAddress={account?.address} />
         </div>
 
       </div>
-
-      {/* MOBILE BOTTOM NAVIGATION DOCK */}
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
-      
     </main>
   );
 }
 
-// --- NEW COMPONENTS FOR MINIPAY AUTO-CONNECT ---
-
+// MINIPAY SILENT AUTO-CONNECT
 function MiniPayNav() {
   const account = useActiveAccount();
   const { connect } = useConnect();
 
-  // 1. Silent Auto-Connect for MiniPay (Injected Wallet)
   useEffect(() => {
     if (!account && typeof window !== "undefined" && window.ethereum) {
       connect(createWallet("injected"));
     }
   }, [account, connect]);
 
-  // 2. Loading State while connecting
-  if (!account) {
-    return <div className="text-xs text-gray-500 font-bold animate-pulse">Initializing...</div>;
-  }
+  if (!account) return <div className="text-xs text-gray-500 font-bold animate-pulse">Initializing...</div>;
 
-  // 3. Render only the Stablecoin Balances (No Address shown)
   return (
     <div className="flex gap-2 flex-wrap justify-end">
       {STABLECOINS.map((token) => (
@@ -312,7 +365,6 @@ function TokenBadge({ token, accountAddress }: { token: any, accountAddress: str
     params: [accountAddress],
   });
 
-  // Calculate balance based on the token's specific decimals (USDC/USDT use 6, USDm uses 18)
   const formattedBalance = data ? (Number(data) / 10 ** token.decimals).toFixed(2) : "0.00";
 
   return (
