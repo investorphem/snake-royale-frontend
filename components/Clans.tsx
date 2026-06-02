@@ -5,6 +5,7 @@ import { useActiveAccount } from "thirdweb/react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function Clans() {
+<<<<<<< HEAD
   const account = useActiveAccount();
   const [activeView, setActiveView] = useState<'hub' | 'create'>('hub');
   
@@ -13,6 +14,10 @@ export default function Clans() {
   const [topClans, setTopClans] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [txStatus, setTxStatus] = useState('');
+=======
+  const [hasClan, setHasClan] = useState(false);
+  const [activeView, setActiveView] = useState<'hub' | 'create'>('hub');
+>>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
 
   // Create Clan Form State
   const [clanName, setClanName] = useState('');
@@ -141,7 +146,7 @@ export default function Clans() {
 
   return (
     <div className="w-full flex flex-col gap-6 animate-fade-in pb-10">
-      
+
       {/* CLANS HEADER */}
       <div className="bg-[#111722] p-6 lg:p-8 rounded-3xl border border-white/5 relative overflow-hidden flex justify-between items-center">
         <div className="z-10 relative">
@@ -156,10 +161,10 @@ export default function Clans() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
+
         {/* LEFT COLUMN: User Status & Wars */}
         <div className="lg:col-span-7 flex flex-col gap-6">
-          
+
           {/* USER SYNDICATE STATUS */}
           <div className="bg-gradient-to-r from-blue-500/10 to-transparent p-[1px] rounded-3xl">
             <div className="bg-[#111722] p-6 rounded-3xl border border-blue-500/20 flex flex-col items-center text-center transition-all">
@@ -199,13 +204,26 @@ export default function Clans() {
                   <p className="text-gray-400 text-sm mb-6 max-w-sm mx-auto">
                     You are currently operating as a solo agent. Join a syndicate to access multiplier yields, or create your own to lead.
                   </p>
+<<<<<<< HEAD
                   <div className="flex gap-4 w-full max-w-xs mx-auto">
+=======
+                  <div className="flex gap-4 w-full max-w-xs">
+>>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
                     <button 
                       onClick={() => setActiveView('create')}
                       className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]"
                     >
                       Create Clan
                     </button>
+<<<<<<< HEAD
+=======
+                    <button 
+                      onClick={() => setActiveView('hub')}
+                      className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl transition-all border border-white/5"
+                    >
+                      Find Clan
+                    </button>
+>>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
                   </div>
                 </div>
               ) : (
@@ -256,6 +274,31 @@ export default function Clans() {
         <div className="lg:col-span-5">
           <div className="bg-[#111722] p-6 rounded-3xl border border-white/5 h-full">
             <h3 className="text-gray-400 font-bold uppercase tracking-widest text-sm mb-6">Top Syndicates</h3>
+<<<<<<< HEAD
+=======
+
+            <div className="space-y-3">
+              {topClans.map((clan, idx) => (
+                <div key={idx} className="bg-[#0B0F17] p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:bg-gray-800/50 transition-colors cursor-pointer">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm ${
+                    clan.rank === 1 ? 'bg-yellow-500/20 text-yellow-500' :
+                    clan.rank === 2 ? 'bg-gray-300/20 text-gray-300' :
+                    'bg-orange-500/20 text-orange-500'
+                  }`}>
+                    #{clan.rank}
+                  </div>
+                  <div className="flex-grow">
+                    <h4 className="font-bold text-white">{clan.name}</h4>
+                    <p className="text-xs text-gray-500">{clan.members} Members</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-mono text-sm text-green-400 font-bold">{clan.yield}</p>
+                    <p className="text-[9px] text-gray-500 uppercase tracking-widest">Yield Bonus</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+>>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
 
             {isLoading ? (
                <div className="space-y-3 animate-pulse">
