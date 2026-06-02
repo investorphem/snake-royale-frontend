@@ -2,34 +2,48 @@
 
 import { useEffect, useRef } from 'react';
 import Phaser from 'phaser';
-import config from '@/game/config';
 import MainScene from '@/game/scenes/MainScene';
 
-// 1. Define the props interface to satisfy TypeScript
 interface PhaserGameProps {
   walletAddress?: string;
 }
 
-// 2. Pass the props into the component
 export default function PhaserGame({ walletAddress }: PhaserGameProps) {
+  // We use refs to stop Next.js from accidentally booting the game twice
   const gameRef = useRef<HTMLDivElement>(null);
+  const gameInstance = useRef<Phaser.Game | null>(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && gameRef.current) {
-      // Initialize the Phaser Game
-      const game = new Phaser.Game({
-        ...config,
+    // Only run if we are in the browser, the div exists, and the game hasn't started yet
+    if (typeof window !== 'undefined' && gameRef.current && !gameInstance.current) {
+      
+      // Injecting config directly here so we don't rely on external config files
+      gameInstance.current = new Phaser.Game({
+        type: Phaser.AUTO,
+        width: 800,
+        height: 600,
         parent: gameRef.current,
+        backgroundColor: '#0B0E14',
+        scene: [MainScene],
       });
 
-      // Pass the wallet address into the MainScene when it boots up
-      game.scene.add('MainScene', MainScene, true, { walletAddress });
-
-      return () => {
-        game.destroy(true);
-      };
+      // Pass the wallet address to the scene
+      gameInstance.current.scene.start('MainScene', { walletAddress });
     }
-  }, [walletAddress]); // Re-run if wallet address changes
 
-  return <div ref={gameRef} className="w-full h-full" />;
+    // Cleanup function when player leaves the page
+    return () => {
+      if (gameInstance.current) {
+        gameInstance.current.destroy(true);
+        gameInstance.current = null;
+      }
+    };
+  }, [walletAddress]);
+
+  // Forcing standard pixel sizes so CSS can't break the canvas
+  return (
+    <div className="flex justify-center items-center w-full h-full bg-black">
+      <div ref={gameRef} style={{ width: '800px', height: '600px' }} />
+    </div>
+  );
 }
