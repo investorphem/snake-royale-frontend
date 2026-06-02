@@ -4,7 +4,7 @@ import { useState } from "react";
 
 export default function Clans() {
   const [hasClan, setHasClan] = useState(false);
-  const [activeView, setActiveView] = useState<'hub' | 'create'>('home');
+  const [activeView, setActiveView] = useState<'hub' | 'create'>('hub');
 
   const topClans = [
     { rank: 1, name: 'Venom Cartel', members: '48/50', power: '245K', yield: '+15%' },
@@ -19,7 +19,7 @@ export default function Clans() {
 
   return (
     <div className="w-full flex flex-col gap-6 animate-fade-in pb-10">
-      
+
       {/* CLANS HEADER */}
       <div className="bg-[#111722] p-6 lg:p-8 rounded-3xl border border-white/5 relative overflow-hidden flex justify-between items-center">
         <div className="z-10 relative">
@@ -34,10 +34,10 @@ export default function Clans() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
+
         {/* LEFT COLUMN: User Status & Wars */}
         <div className="lg:col-span-7 flex flex-col gap-6">
-          
+
           {/* USER SYNDICATE STATUS */}
           <div className="bg-gradient-to-r from-blue-500/10 to-transparent p-[1px] rounded-3xl">
             <div className="bg-[#111722] p-6 rounded-3xl border border-blue-500/20 flex flex-col items-center text-center">
@@ -51,10 +51,16 @@ export default function Clans() {
                     You are currently operating as a solo agent. Join a syndicate to access multiplier yields, or create your own to lead.
                   </p>
                   <div className="flex gap-4 w-full max-w-xs">
-                    <button className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                    <button 
+                      onClick={() => setActiveView('create')}
+                      className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]"
+                    >
                       Create Clan
                     </button>
-                    <button className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl transition-all border border-white/5">
+                    <button 
+                      onClick={() => setActiveView('hub')}
+                      className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-xl transition-all border border-white/5"
+                    >
                       Find Clan
                     </button>
                   </div>
@@ -108,7 +114,7 @@ export default function Clans() {
         <div className="lg:col-span-5">
           <div className="bg-[#111722] p-6 rounded-3xl border border-white/5 h-full">
             <h3 className="text-gray-400 font-bold uppercase tracking-widest text-sm mb-6">Top Syndicates</h3>
-            
+
             <div className="space-y-3">
               {topClans.map((clan, idx) => (
                 <div key={idx} className="bg-[#0B0F17] p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:bg-gray-800/50 transition-colors cursor-pointer">
