@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from "react";
-import { ThirdwebProvider, ConnectButton, useActiveAccount } from "thirdweb/react";
+import { useState, useEffect } from "react";
+import { ThirdwebProvider, useActiveAccount, useConnect, useReadContract } from "thirdweb/react";
 import { createThirdwebClient, defineChain, prepareContractCall, sendTransaction, waitForReceipt, getContract } from "thirdweb";
+import { createWallet } from "thirdweb/wallets";
 import dynamic from 'next/dynamic';
 import ProfileSidebar from "@/components/ProfileSidebar";
 import FeatureGrid from "@/components/FeatureGrid";
@@ -11,13 +12,22 @@ import Shop from "@/components/Shop";
 import Inventory from "@/components/Inventory";
 import Clans from "@/components/Clans";
 
-// 1. Initialize Thirdweb Client & Celo Sepolia Chain Matrix
+// 1. Initialize Thirdweb Client
 const client = createThirdwebClient({ 
   clientId: "3yd744Q5LPJ3BC1ndknBd0JLotNiKe4Dy-x2aqYEXKfNkzBLo3kXQL-5u0P3aMOX17uEdwClXg_FRKf_RSe09w" 
 }); 
-const celoSepolia = defineChain(11142220); 
 
-// 2. Smart Contract Declarations
+// 2. Chain Definitions
+const celoSepolia = defineChain(11142220); // Used for your current testnet smart contract
+const celoMainnet = defineChain(42220);    // Used for reading live MiniPay balances
+
+// 3. MiniPay Mainnet Stablecoin Addresses
+const STABLECOINS = [
+  { symbol: "USDm", address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", decimals: 18, color: "text-green-400" },
+  { symbol: "USDC", address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", decimals: 6, color: "text-blue-400" },
+  { symbol: "USDT", address: "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e", decimals: 6, color: "text-teal-400" },
+];
+
 const SNAKE_WAGER_ADDRESS = "0xF30b45003dCDe160B94962bB58FA8C2E9Ab70372";
 const CUSD_SEPOLIA_ADDRESS = "0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1"; 
 
@@ -120,8 +130,9 @@ function SnakeRoyaleApp() {
            </span>
         </div>
         
+        {/* NEW MINIPAY AUTO-CONNECT NAVBAR */}
         <div className="flex items-center gap-4">
-          <ConnectButton client={client} chain={celoSepolia} theme={"dark"} />
+          <MiniPayNav />
         </div>
       </nav>
 
@@ -132,7 +143,6 @@ function SnakeRoyaleApp() {
         <div className="lg:col-span-8 flex flex-col gap-6">
           
           {/* --- TAB ROUTING LOGIC --- */}
-
           {activeTab === 'shop' && <Shop />}
           {activeTab === 'inventory' && <Inventory />}
           {activeTab === 'clans' && <Clans />}
@@ -183,7 +193,7 @@ function SnakeRoyaleApp() {
                         </div>
 
                         {!account ? (
-                          <p className="text-sm text-gray-500 font-semibold">Connect wallet to unlock on-chain wagers</p>
+                          <p className="text-sm text-gray-500 font-semibold">Connecting to MiniPay...</p>
                         ) : (
                           <>
                             <button 
@@ -263,5 +273,52 @@ function SnakeRoyaleApp() {
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
       
     </main>
+  );
+}
+
+// --- NEW COMPONENTS FOR MINIPAY AUTO-CONNECT ---
+
+function MiniPayNav() {
+  const account = useActiveAccount();
+  const { connect } = useConnect();
+
+  // 1. Silent Auto-Connect for MiniPay (Injected Wallet)
+  useEffect(() => {
+    if (!account && typeof window !== "undefined" && window.ethereum) {
+      connect(createWallet("injected"));
+    }
+  }, [account, connect]);
+
+  // 2. Loading State while connecting
+  if (!account) {
+    return <div className="text-xs text-gray-500 font-bold animate-pulse">Initializing...</div>;
+  }
+
+  // 3. Render only the Stablecoin Balances (No Address shown)
+  return (
+    <div className="flex gap-2 flex-wrap justify-end">
+      {STABLECOINS.map((token) => (
+        <TokenBadge key={token.symbol} token={token} accountAddress={account.address} />
+      ))}
+    </div>
+  );
+}
+
+function TokenBadge({ token, accountAddress }: { token: any, accountAddress: string }) {
+  const contract = getContract({ client, chain: celoMainnet, address: token.address });
+  const { data } = useReadContract({
+    contract,
+    method: "function balanceOf(address) view returns (uint256)",
+    params: [accountAddress],
+  });
+
+  // Calculate balance based on the token's specific decimals (USDC/USDT use 6, USDm uses 18)
+  const formattedBalance = data ? (Number(data) / 10 ** token.decimals).toFixed(2) : "0.00";
+
+  return (
+    <div className="bg-[#0B0F17] border border-white/5 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-[0_0_10px_rgba(255,255,255,0.02)]">
+       <span className="text-white font-black text-sm">{formattedBalance}</span>
+       <span className={`${token.color} text-[10px] font-black uppercase tracking-widest`}>{token.symbol}</span>
+    </div>
   );
 }
