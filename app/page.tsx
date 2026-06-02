@@ -12,21 +12,12 @@ import Shop from "@/components/Shop";
 import Inventory from "@/components/Inventory";
 import Clans from "@/components/Clans";
 
-<<<<<<< HEAD
-=======
-// 1. Initialize Thirdweb Client
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
 const client = createThirdwebClient({ 
   clientId: "3yd744Q5LPJ3BC1ndknBd0JLotNiKe4Dy-x2aqYEXKfNkzBLo3kXQL-5u0P3aMOX17uEdwClXg_FRKf_RSe09w" 
 }); 
 
-<<<<<<< HEAD
 const gameNetwork = defineChain(11142220); // Testnet for development, swap to Mainnet later
 const mainnetChain = defineChain(42220);    
-=======
-const celoSepolia = defineChain(11142220); 
-const celoMainnet = defineChain(42220);    
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
 
 const STABLECOINS = [
   { symbol: "USDm", address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", decimals: 18, color: "text-green-400" },
@@ -60,26 +51,13 @@ function SnakeRoyaleApp() {
   const [roomIdInput, setRoomIdInput] = useState('1');
   const [feeInput, setFeeInput] = useState('1');
 
-<<<<<<< HEAD
   const [activeRooms, setActiveRooms] = useState<any[]>([]);
   const [isFetchingRooms, setIsFetchingRooms] = useState(false);
 
-=======
-  // --- NEW: DYNAMIC ON-CHAIN LOBBY STATE ---
-  const [activeRooms, setActiveRooms] = useState<any[]>([]);
-  const [isFetchingRooms, setIsFetchingRooms] = useState(false);
-
-  // Fetch the 10 most recent rooms from the smart contract mapping
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
   const fetchLiveRooms = async () => {
     setIsFetchingRooms(true);
     const roomsFound = [];
     
-<<<<<<< HEAD
-=======
-    // In production, an indexer like a Dune Dashboard or a Subgraph is faster, 
-    // but a quick loop works perfectly for reading active EVM mappings on load.
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
     for (let i = 1; i <= 10; i++) {
       try {
         const roomData = await readContract({
@@ -88,7 +66,6 @@ function SnakeRoyaleApp() {
           params: [BigInt(i)]
         });
         
-<<<<<<< HEAD
         if (roomData[4] === true) {
           roomsFound.push({
             roomId: Number(roomData[0]),
@@ -97,37 +74,18 @@ function SnakeRoyaleApp() {
         }
       } catch (error) {
         // Ignore un-mined rooms
-=======
-        // If isActive is true (index 4 in the return tuple)
-        if (roomData[4] === true) {
-          roomsFound.push({
-            roomId: Number(roomData[0]),
-            entryFee: (Number(roomData[1]) / 1e18).toFixed(2) // Convert from Wei to cUSD formatting
-          });
-        }
-      } catch (error) {
-        console.error(`Room ${i} not found or error parsing.`);
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
       }
     }
     setActiveRooms(roomsFound);
     setIsFetchingRooms(false);
   };
 
-<<<<<<< HEAD
-=======
-  // Trigger the fetch when the user opens the "Join" menu
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
   useEffect(() => {
     if (appState === 'join') {
       fetchLiveRooms();
     }
   }, [appState]);
 
-<<<<<<< HEAD
-=======
-  // --- ESCROW TRANSACTION LOGIC ---
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
   const handleCreateRoom = async () => {
     if (!account) return;
     try {
@@ -154,20 +112,11 @@ function SnakeRoyaleApp() {
     }
   };
 
-<<<<<<< HEAD
   const handleJoinRoom = async (selectedRoomId: string, requiredFee: string) => {
     if (!account) return;
     try {
       setTxStatus(`Authorizing Stablecoin Vault for Room ${selectedRoomId}...`);
       const feeInWei = BigInt(parseFloat(requiredFee) * 1e18); 
-=======
-  // We now accept the fee directly from the dynamically selected room
-  const handleJoinRoom = async (selectedRoomId: string, requiredFeeInCUSD: string) => {
-    if (!account) return;
-    try {
-      setTxStatus(`Approving Vault Allocation for Room ${selectedRoomId}...`);
-      const feeInWei = BigInt(parseFloat(requiredFeeInCUSD) * 1e18); 
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
       const roomId = BigInt(selectedRoomId);
 
       const approveTx = prepareContractCall({
@@ -264,11 +213,7 @@ function SnakeRoyaleApp() {
                         </div>
 
                         {!account ? (
-<<<<<<< HEAD
                           <p className="text-sm text-gray-500 font-semibold animate-pulse">Establishing secure connection...</p>
-=======
-                          <p className="text-sm text-gray-500 font-semibold">Connecting to Wallet...</p>
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
                         ) : (
                           <>
                             <button 
@@ -308,7 +253,6 @@ function SnakeRoyaleApp() {
                     </div>
                   )}
 
-                  {/* DYNAMIC JOIN ROOM LOBBY */}
                   {appState === 'join' && (
                     <div className="w-full max-w-md flex flex-col animate-fade-in">
                       <div className="flex justify-between items-center mb-6">
@@ -324,20 +268,12 @@ function SnakeRoyaleApp() {
 
                       {isFetchingRooms ? (
                         <div className="text-center py-10 text-gray-500 font-semibold animate-pulse">
-<<<<<<< HEAD
                           Scanning network for active rooms...
-=======
-                          Scanning Blockchain for active rooms...
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
                         </div>
                       ) : activeRooms.length === 0 ? (
                         <div className="text-center py-10 bg-[#0B0F17] rounded-xl border border-white/5">
                           <p className="text-gray-400 font-bold mb-2">No Active Rooms Found</p>
-<<<<<<< HEAD
                           <p className="text-xs text-gray-600 mb-4">Be the first to host a match.</p>
-=======
-                          <p className="text-xs text-gray-600 mb-4">Be the first to host a match on-chain.</p>
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
                           <button onClick={() => setAppState('create')} className="text-indigo-400 text-sm font-bold hover:underline">
                             Host a new wager →
                           </button>
@@ -352,11 +288,7 @@ function SnakeRoyaleApp() {
                                 <p className="text-xs text-gray-500">Awaiting Challengers</p>
                               </div>
                               <div className="flex items-center gap-4">
-<<<<<<< HEAD
                                 <span className="font-black text-green-400">{room.entryFee} Stake</span>
-=======
-                                <span className="font-black text-green-400">{room.entryFee} cUSD</span>
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
                                 <button 
                                   onClick={() => handleJoinRoom(room.roomId.toString(), room.entryFee)}
                                   disabled={!!txStatus}
@@ -389,10 +321,6 @@ function SnakeRoyaleApp() {
   );
 }
 
-<<<<<<< HEAD
-=======
-// MINIPAY SILENT AUTO-CONNECT
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
 function MiniPayNav() {
   const account = useActiveAccount();
   const { connect } = useConnect();
@@ -403,7 +331,6 @@ function MiniPayNav() {
     }
   }, [account, connect]);
 
-<<<<<<< HEAD
   useEffect(() => {
     const onboardPlayer = async () => {
       if (!account?.address) return;
@@ -422,8 +349,6 @@ function MiniPayNav() {
     onboardPlayer();
   }, [account?.address]);
 
-=======
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
   if (!account) return <div className="text-xs text-gray-500 font-bold animate-pulse">Initializing...</div>;
 
   return (
@@ -436,11 +361,7 @@ function MiniPayNav() {
 }
 
 function TokenBadge({ token, accountAddress }: { token: any, accountAddress: string }) {
-<<<<<<< HEAD
   const contract = getContract({ client, chain: mainnetChain, address: token.address });
-=======
-  const contract = getContract({ client, chain: celoMainnet, address: token.address });
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
   const { data } = useReadContract({
     contract,
     method: "function balanceOf(address) view returns (uint256)",
@@ -455,8 +376,4 @@ function TokenBadge({ token, accountAddress }: { token: any, accountAddress: str
        <span className={`${token.color} text-[10px] font-black uppercase tracking-widest`}>{token.symbol}</span>
     </div>
   );
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> f44a698310c73f6aece17b3edd8ee9992dc06cc7
