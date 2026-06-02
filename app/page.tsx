@@ -7,7 +7,9 @@ import dynamic from 'next/dynamic';
 import ProfileSidebar from "@/components/ProfileSidebar";
 import FeatureGrid from "@/components/FeatureGrid";
 import MobileNav from "@/components/MobileNav";
-import Shop from "@/components/Shop"; // NEW: Shop Import
+import Shop from "@/components/Shop";
+import Inventory from "@/components/Inventory";
+import Clans from "@/components/Clans";
 
 // 1. Initialize Thirdweb Client & Celo Sepolia Chain Matrix
 const client = createThirdwebClient({ 
@@ -132,22 +134,8 @@ function SnakeRoyaleApp() {
           {/* --- TAB ROUTING LOGIC --- */}
 
           {activeTab === 'shop' && <Shop />}
-
-          {activeTab === 'inventory' && (
-            <div className="w-full flex flex-col items-center justify-center py-24 bg-[#111722] rounded-3xl border border-white/5 animate-fade-in">
-              <span className="text-6xl mb-4">🎒</span>
-              <h2 className="text-2xl font-black text-white mb-2 tracking-widest">INVENTORY</h2>
-              <p className="text-gray-500 font-semibold">Your cryptographic assets will appear here soon.</p>
-            </div>
-          )}
-
-          {activeTab === 'clans' && (
-            <div className="w-full flex flex-col items-center justify-center py-24 bg-[#111722] rounded-3xl border border-white/5 animate-fade-in">
-              <span className="text-6xl mb-4">🛡️</span>
-              <h2 className="text-2xl font-black text-white mb-2 tracking-widest">SYNDICATE CLANS</h2>
-              <p className="text-gray-500 font-semibold">Clan formation protocols are currently offline.</p>
-            </div>
-          )}
+          {activeTab === 'inventory' && <Inventory />}
+          {activeTab === 'clans' && <Clans />}
 
           {activeTab === 'profile' && (
             <div className="block lg:hidden h-full animate-fade-in">
