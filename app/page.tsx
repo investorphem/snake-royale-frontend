@@ -152,7 +152,6 @@ function SnakeRoyaleApp() {
       const { supabase } = await import("@/lib/supabaseClient");
       const lowerAddress = account.address.toLowerCase();
 
-      // 1. Fetch current stats
       const { data: player } = await supabase
         .from('players')
         .select('xp, games_played')
@@ -160,7 +159,6 @@ function SnakeRoyaleApp() {
         .single();
 
       if (player) {
-        // 2. Update with new game data
         await supabase
           .from('players')
           .update({
@@ -211,7 +209,6 @@ function SnakeRoyaleApp() {
             <>
               {appState === 'playing' ? (
                 <div className="w-full aspect-video bg-black rounded-3xl overflow-hidden border border-[#22c55e]/30 shadow-[0_0_30px_rgba(34,197,94,0.15)] relative">
-                  {/* INJECTED THE onGameOver PROP HERE */}
                   <PhaserGame walletAddress={account?.address} onGameOver={handleGameOver} />
                   <button 
                     onClick={() => setAppState('menu')}
@@ -353,23 +350,29 @@ function SnakeRoyaleApp() {
   );
 }
 
+// --- HYDRATION FIX & SAFE DATABASE ONBOARDING ---
 function MiniPayNav() {
   const account = useActiveAccount();
   const { connect } = useConnect();
+  const [mounted, setMounted] = useState(false);
   const [isMobileWallet, setIsMobileWallet] = useState(true);
 
+  // 1. Wait for client to mount before detecting wallet to prevent hydration errors
   useEffect(() => {
+    setMounted(true);
+    
     const checkWallet = setTimeout(() => {
       if (typeof window !== "undefined" && (window as any).ethereum) {
-        connect(createWallet("injected" as any)).catch(console.error);
+        connect(createWallet("injected" as any)).catch(() => setIsMobileWallet(false));
       } else {
         setIsMobileWallet(false);
       }
-    }, 1000);
+    }, 1500);
 
     return () => clearTimeout(checkWallet);
   }, [connect]);
 
+  // 2. Safely sync player to Supabase (Only insert if they do NOT exist)
   useEffect(() => {
     const onboardPlayer = async () => {
       if (!account?.address) return;
@@ -377,20 +380,33 @@ function MiniPayNav() {
 
       try {
         const { supabase } = await import("@/lib/supabaseClient");
-        await supabase
+        
+        // Check if user already exists
+        const { data: existingUser } = await supabase
           .from('players')
-          .insert([{ wallet_address: lowerAddress, username: `Player_${lowerAddress.slice(2, 7)}` }])
-          .select();
+          .select('wallet_address')
+          .eq('wallet_address', lowerAddress)
+          .single();
+
+        // If they don't exist, create a default profile
+        if (!existingUser) {
+          await supabase
+            .from('players')
+            .insert([{ wallet_address: lowerAddress, username: `Player_${lowerAddress.slice(2, 7)}` }]);
+        }
       } catch (err) {
-        console.error("Failed to onboard player to database:", err);
+        console.error("Failed to onboard player:", err);
       }
     };
-    onboardPlayer();
+    if (account?.address) onboardPlayer();
   }, [account?.address]);
+
+  // 3. Conditional Render States
+  if (!mounted) return <div className="text-xs text-gray-500 font-bold animate-pulse">Loading Interface...</div>;
 
   if (!account) {
     return isMobileWallet ? (
-      <div className="text-xs text-gray-500 font-bold animate-pulse">Initializing...</div>
+      <div className="text-xs text-gray-500 font-bold animate-pulse">Detecting Wallet...</div>
     ) : (
       <ConnectButton client={client} chain={mainnetChain} theme={"dark"} />
     );
@@ -418,7 +434,4 @@ function TokenBadge({ token, accountAddress }: { token: any, accountAddress: str
   return (
     <div className="bg-[#0B0F17] border border-white/5 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-[0_0_10px_rgba(255,255,255,0.02)]">
        <span className="text-white font-black text-sm">{formattedBalance}</span>
-       <span className={`${token.color} text-[10px] font-black uppercase tracking-widest`}>{token.symbol}</span>
-    </div>
-  );
-}
+       <span className={`${token.color} text-[10px] font-black uppercase tracking-widest`}>{token

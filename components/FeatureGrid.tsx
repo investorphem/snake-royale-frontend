@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 interface FeatureGridProps {
   onSelectAction?: (actionType: string) => void;
@@ -8,6 +9,52 @@ interface FeatureGridProps {
 
 export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
   const [activeModal, setActiveModal] = useState<string | null>(null);
+  
+  // Real-time telemetry state
+  const [topPlayers, setTopPlayers] = useState<any[]>([]);
+  const [topClan, setTopClan] = useState<any>(null);
+  const [activeWar, setActiveWar] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchGridTelemetry = async () => {
+      setIsLoading(true);
+      try {
+        // 1. Fetch Top 3 Players by XP
+        const { data: players } = await supabase
+          .from('players')
+          .select('username, xp')
+          .order('xp', { ascending: false })
+          .limit(3);
+        if (players) setTopPlayers(players);
+
+        // 2. Fetch #1 Global Syndicate
+        const { data: clans } = await supabase
+          .from('clans')
+          .select('name, tag, total_power')
+          .order('total_power', { ascending: false })
+          .limit(1)
+          .single();
+        if (clans) setTopClan(clans);
+
+        // 3. Fetch Highest Active War Pool
+        const { data: wars } = await supabase
+          .from('clan_wars')
+          .select('title, prize_pool')
+          .eq('status', 'LIVE')
+          .order('id', { ascending: false })
+          .limit(1)
+          .single();
+        if (wars) setActiveWar(wars);
+
+      } catch (error) {
+        console.error("Failed to load feature grid telemetry:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchGridTelemetry();
+  }, []);
 
   const modules = [
     {
@@ -21,18 +68,23 @@ export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
       content: (
         <div className="space-y-3">
           <p className="text-xs text-gray-400 font-semibold mb-2">TOP RANKED PROTOCOL AGENTS</p>
-          <div className="space-y-2">
-            {[
-              { rank: '🥇 1', user: '0x71C...8941', score: '18,420 TRPH' },
-              { rank: '🥈 2', user: '0x3A2...F19c', score: '16,110 TRPH' },
-              { rank: '🥉 3', user: '0x9bE...7781', score: '14,950 TRPH' }
-            ].map((item, idx) => (
-              <div key={idx} className="flex justify-between bg-black/40 p-2.5 rounded-lg border border-white/5 text-sm">
-                <span className="font-bold text-gray-300">{item.rank} {item.user}</span>
-                <span className="font-mono text-green-400 font-bold">{item.score}</span>
-              </div>
-            ))}
-          </div>
+          {isLoading ? (
+            <div className="h-20 bg-gray-800 rounded animate-pulse"></div>
+          ) : topPlayers.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-4">No agents registered.</p>
+          ) : (
+            <div className="space-y-2">
+              {topPlayers.map((player, idx) => (
+                <div key={idx} className="flex justify-between items-center bg-black/40 p-2.5 rounded-lg border border-white/5 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}</span>
+                    <span className="font-bold text-gray-300">{player.username}</span>
+                  </div>
+                  <span className="font-black text-green-400">{player.xp.toLocaleString()} XP</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )
     },
@@ -47,15 +99,20 @@ export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
       content: (
         <div className="space-y-3">
           <p className="text-xs text-gray-400 font-semibold mb-2">LIVE ARENA VOLUMES</p>
-          <div className="grid grid-cols-2 gap-2 text-center">
-            <div className="bg-black/40 p-3 rounded-lg border border-white/5">
-              <span className="text-[10px] text-gray-500 block font-bold">GLOBAL TVL</span>
-              <span className="text-lg font-black text-white">42,850 cUSD</span>
-            </div>
-            <div className="bg-black/40 p-3 rounded-lg border border-white/5">
-              <span className="text-[10px] text-gray-500 block font-bold">TOTAL PAYOUTS</span>
-              <span className="text-lg font-black text-yellow-500">128.4K cUSD</span>
-            </div>
+          <div className="bg-black/40 p-4 rounded-lg border border-white/5 text-center">
+            {isLoading ? (
+               <div className="h-10 bg-gray-800 rounded animate-pulse"></div>
+            ) : activeWar ? (
+              <>
+                <span className="text-[10px] text-gray-500 block font-bold uppercase tracking-widest">{activeWar.title} Pool</span>
+                <span className="text-2xl font-black text-yellow-500 mt-1 block">{activeWar.prize_pool}</span>
+              </>
+            ) : (
+              <>
+                <span className="text-[10px] text-gray-500 block font-bold">ACTIVE LIQUIDITY</span>
+                <span className="text-lg font-black text-white">Awaiting Deployment</span>
+              </>
+            )}
           </div>
         </div>
       )
@@ -71,11 +128,18 @@ export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
       content: (
         <div className="space-y-2">
           <p className="text-xs text-gray-400 font-semibold mb-2">AVAILABLE ASSET UPGRADES</p>
-          <div className="grid grid-cols-3 gap-2">
-            {['🔥 Magma', '❄️ Glacial', '🌌 Cosmic'].map((skin, idx) => (
-              <div key={idx} className="bg-black/40 p-2 rounded-lg border border-white/5 text-center cursor-pointer hover:border-purple-500/30">
-                <span className="text-xs font-bold block text-gray-300">{skin}</span>
-                <span className="text-[9px] text-purple-400 font-mono">0.5 CELO</span>
+          <div className="grid grid-cols-1 gap-2">
+            {[
+              { name: 'Golden King', price: '25.00 USDC', icon: '👑', color: 'border-yellow-500/30' },
+              { name: 'Cyber Snake', price: '15.00 USDC', icon: '🤖', color: 'border-purple-500/30' },
+              { name: 'Magma Flow', price: '12.50 USDC', icon: '🌋', color: 'border-red-500/30' }
+            ].map((skin, idx) => (
+              <div key={idx} className={`flex justify-between items-center bg-black/40 p-3 rounded-lg border text-sm ${skin.color}`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{skin.icon}</span>
+                  <span className="font-bold text-gray-300">{skin.name}</span>
+                </div>
+                <span className="font-black text-purple-400">{skin.price}</span>
               </div>
             ))}
           </div>
@@ -91,11 +155,20 @@ export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
       borderColor: 'hover:border-blue-500/50',
       textColor: 'group-hover:text-blue-400',
       content: (
-        <div className="p-3 bg-black/40 rounded-lg border border-white/5 text-center">
-          <p className="text-sm text-gray-300 font-medium">No Active Clan Affiliation</p>
-          <button className="mt-2 text-xs bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-md transition-all">
-            Initialize Syndicate
-          </button>
+        <div className="space-y-3">
+          <p className="text-xs text-gray-400 font-semibold mb-2">APEX SYNDICATE</p>
+          <div className="p-4 bg-black/40 rounded-lg border border-white/5 text-center">
+            {isLoading ? (
+              <div className="h-10 bg-gray-800 rounded animate-pulse"></div>
+            ) : topClan ? (
+              <>
+                <h4 className="font-black text-white text-lg">{topClan.name} <span className="text-gray-500 text-xs">[{topClan.tag}]</span></h4>
+                <p className="text-xs text-blue-400 font-bold mt-1 uppercase tracking-widest">Power: {topClan.total_power}</p>
+              </>
+            ) : (
+              <p className="text-sm text-gray-300 font-medium">No Networks Formed</p>
+            )}
+          </div>
         </div>
       )
     }
