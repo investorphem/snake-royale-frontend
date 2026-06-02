@@ -1,169 +1,202 @@
-import Phaser from 'undefined';
+import Phaser from 'phaser';
 import { io, Socket } from 'socket.io-client';
 
 export default class MainScene extends Phaser.Scene {
   private socket!: Socket;
-  private otherPlayers: { [id: string]: Phaser.GameObjects.Group } = {};
-  private mySnake!: Phaser.GameObjects.Group;
-  private food!: Phaser.GameObjects.Rectangle;
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private gridSize = 20;
+  private otherPlayers: { [id: string]: { head: Phaser.GameObjects.Image, body: Phaser.GameObjects.Image[] } } = {};
+  
+  // Local Player Objects
+  private head!: Phaser.GameObjects.Image;
+  private bodySegments: Phaser.GameObjects.Image[] = [];
+  private positionHistory: { x: number, y: number }[] = [];
+  
+  // Game Objects
+  private food!: Phaser.GameObjects.Image;
   private walletAddress: string = "";
-  private currentDirection: { x: number, y: number } = { x: 0, y: -this.gridSize };
-  private moveTimer: number = 0;
-  private moveInterval: number = 100; // Snake speed (lower is faster)
+  
+  // 360-Degree Movement Parameters
+  private speed: number = 4;          // Move velocity per tick
+  private historySpacing: number = 6; // Controls how tightly the tail segments follow each other
 
   constructor() {
     super('MainScene');
   }
 
+  preload() {
+    // 1. Load Custom SVG Vectors from public directory
+    this.load.svg('head', '/head.svg', { width: 40, height: 40 });
+    this.load.svg('body', '/body.svg', { width: 30, height: 30 });
+    this.load.svg('food', '/orb.svg', { width: 30, height: 30 });
+    
+    // 2. Load background image asset
+    this.load.image('bg', '/hex-bg.jpg');
+
+    // 3. Audio Asset Pipeline Hooks
+    // Un-comment these lines as soon as you drop matching mp3s into public/ folder
+    // this.load.audio('bgMusic', '/bgMusic.mp3');
+    // this.load.audio('eatSound', '/gulp.mp3');
+  }
+
   init(data: { walletAddress: string }) {
-    // Receive the wallet address from the Next.js wrapper
     this.walletAddress = data.walletAddress || "0xGuest";
   }
 
   create() {
-    // Setup keyboard inputs
-    this.cursors = this.input.keyboard!.createCursorKeys();
+    // Render the tileable sci-fi arena backdrop
+    this.add.tileSprite(400, 300, 800, 600, 'bg').setAlpha(0.25);
 
-    // Spawn hidden food initially until the server provides the true coordinate
-    this.food = this.add.rectangle(-100, -100, this.gridSize - 2, this.gridSize - 2, 0xff00ff);
-    
-    // 🌐 Connect to your LIVE Node.js Multiplayer Server
+    // Audio Trigger Init
+    // if (this.sound.get('bgMusic') === null) {
+    //   this.sound.play('bgMusic', { loop: true, volume: 0.3 });
+    // }
+
+    // Render the authoritative token food orb
+    this.food = this.add.image(-100, -100, 'food');
+
+    // Establish dynamic WebSocket bridge with Render engine
     this.socket = io('https://snake-royale-backend.onrender.com');
 
-    // Tell the server we joined and pass our wallet address for the smart contract
+    // Register room entry lifecycle event
     this.socket.emit('joinArena', this.walletAddress);
 
-    // Listen for current players in the room
+    // Server Handshake: Instantiate current active players
     this.socket.on('currentPlayers', (players: any) => {
       Object.keys(players).forEach((id) => {
         if (id === this.socket.id) {
-          this.createPlayerSnake(players[id]);
+          this.createMySnake(players[id]);
         } else {
-          this.createOtherPlayer(players[id]);
+          this.createEnemySnake(players[id]);
         }
       });
     });
 
-    // Listen for new players joining
+    // Handle new enemy entry events
     this.socket.on('newPlayer', (playerInfo: any) => {
-      this.createOtherPlayer(playerInfo);
+      this.createEnemySnake(playerInfo);
     });
 
-    // Listen for other players moving
+    // Handle authoritative food displacement synchronized by backend
+    this.socket.on('foodLocation', (loc: { x: number, y: number }) => {
+      this.food.setPosition(loc.x, loc.y);
+    });
+
+    // Synchronize remote player motion coordinates 
     this.socket.on('playerMoved', (playerInfo: any) => {
-      if (this.otherPlayers[playerInfo.id]) {
-        this.updateSnakeBody(this.otherPlayers[playerInfo.id], playerInfo.body, playerInfo.color);
+      const enemy = this.otherPlayers[playerInfo.id];
+      if (enemy) {
+        enemy.head.setPosition(playerInfo.x, playerInfo.y);
+        enemy.head.setRotation(playerInfo.angle);
+
+        // Instantly align enemy body segments to positions broadcasted by server
+        for (let i = 0; i < playerInfo.body.length; i++) {
+          if (enemy.body[i]) {
+            enemy.body[i].setPosition(playerInfo.body[i].x, playerInfo.body[i].y);
+          } else {
+            // Append missing segment if enemy grew on server
+            const newSegment = this.add.image(playerInfo.body[i].x, playerInfo.body[i].y, 'body');
+            enemy.body.push(newSegment);
+          }
+        }
       }
     });
 
-    // Listen for players disconnecting
-    this.socket.on('playerDisconnected', (playerId: string) => {
-      if (this.otherPlayers[playerId]) {
-        this.otherPlayers[playerId].destroy(true, true);
-        delete this.otherPlayers[playerId];
-      }
-    });
-
-    // Listen for food spawns
-    this.socket.on('foodLocation', (foodLocation: { x: number, y: number }) => {
-      this.food.setPosition(foodLocation.x, foodLocation.y);
-    });
-
-    // Listen for score/growth updates
+    // Handle growth events and audio responses
     this.socket.on('playerScoreUpdate', (playerInfo: any) => {
       if (playerInfo.id === this.socket.id) {
-        // Our snake grew
-        this.updateSnakeBody(this.mySnake, playerInfo.body, 0x00ff00);
-      } else if (this.otherPlayers[playerInfo.id]) {
-        // Someone else's snake grew
-        this.updateSnakeBody(this.otherPlayers[playerInfo.id], playerInfo.body, 0x00ffff);
+        // Trigger local fx crunch audio
+        // this.sound.play('eatSound', { volume: 0.6 });
+        
+        // Append physical SVG body link to segment map
+        const newSegment = this.add.image(-100, -100, 'body');
+        this.bodySegments.push(newSegment);
       }
     });
 
-    // Listen for game over / smart contract settlement
+    // Handle game completion signal 
     this.socket.on('gameOver', (data: { winnerWallet: string }) => {
-      this.add.text(400, 300, `GAME OVER\nWinner: ${data.winnerWallet.substring(0, 6)}...`, {
-        fontSize: '48px',
-        color: '#ff0000',
-        align: 'center'
+      this.physics.pause();
+      const statusText = data.winnerWallet === this.walletAddress ? "VICTORY!" : "GAME OVER";
+      
+      this.add.text(400, 300, statusText, {
+        fontSize: '64px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#22c55e',
+        strokeThickness: 8
       }).setOrigin(0.5);
-      
-      this.scene.pause();
     });
-  }
 
-  update(time: number, delta: number) {
-    if (!this.mySnake) return;
-
-    // Handle Input for Direction (Prevent 180-degree self-collisions)
-    if (this.cursors.left.isDown && this.currentDirection.x === 0) {
-      this.currentDirection = { x: -this.gridSize, y: 0 };
-    } else if (this.cursors.right.isDown && this.currentDirection.x === 0) {
-      this.currentDirection = { x: this.gridSize, y: 0 };
-    } else if (this.cursors.up.isDown && this.currentDirection.y === 0) {
-      this.currentDirection = { x: 0, y: -this.gridSize };
-    } else if (this.cursors.down.isDown && this.currentDirection.y === 0) {
-      this.currentDirection = { x: 0, y: this.gridSize };
-    }
-
-    // Grid-based movement logic controlled by moveInterval
-    this.moveTimer += delta;
-    if (this.moveTimer >= this.moveInterval) {
-      this.moveTimer = 0;
-
-      const head = this.mySnake.getChildren()[0] as Phaser.GameObjects.Rectangle;
-      let newX = head.x + this.currentDirection.x;
-      let newY = head.y + this.currentDirection.y;
-
-      // Screen Wrap Logic
-      if (newX < 0) newX = 800 - this.gridSize;
-      if (newX >= 800) newX = 0;
-      if (newY < 0) newY = 600 - this.gridSize;
-      if (newY >= 600) newY = 0;
-
-      // Move body segments forward
-      const children = this.mySnake.getChildren() as Phaser.GameObjects.Rectangle[];
-      for (let i = children.length - 1; i > 0; i--) {
-        children[i].setPosition(children[i - 1].x, children[i - 1].y);
+    // Handle player dropouts
+    this.socket.on('playerDisconnected', (id: string) => {
+      if (this.otherPlayers[id]) {
+        this.otherPlayers[id].head.destroy();
+        this.otherPlayers[id].body.forEach(seg => seg.destroy());
+        delete this.otherPlayers[id];
       }
-      
-      // Move head
-      head.setPosition(newX, newY);
+    });
+  }
 
-      // Extract new body coordinates to send to server
-      const bodyData = children.map(segment => ({ x: segment.x, y: segment.y }));
-
-      // Send our new position to the server
-      this.socket.emit('playerMovement', { x: newX, y: newY, body: bodyData });
+  // Create your own controllable snake
+  private createMySnake(playerInfo: any) {
+    this.head = this.add.image(playerInfo.x, playerInfo.y, 'head');
+    this.head.setDepth(10); // Keeps head layer layered structurally over body segments
+    
+    // Spawn initial tail lengths
+    for (let i = 0; i < 3; i++) {
+      this.bodySegments.push(this.add.image(playerInfo.x, playerInfo.y, 'body'));
     }
   }
 
-  // --- Helper Functions ---
+  // Create standard remote enemy representation
+  private createEnemySnake(playerInfo: any) {
+    const enemyHead = this.add.image(playerInfo.x, playerInfo.y, 'head');
+    enemyHead.setTint(playerInfo.color); // Give enemies a distinct skin variation
+    enemyHead.setDepth(9);
 
-  private createPlayerSnake(playerInfo: any) {
-    this.mySnake = this.add.group();
-    playerInfo.body.forEach((segment: {x: number, y: number}) => {
-      const rect = this.add.rectangle(segment.x, segment.y, this.gridSize - 2, this.gridSize - 2, 0x00ff00);
-      this.mySnake.add(rect);
-    });
+    const enemyBody: Phaser.GameObjects.Image[] = [];
+    
+    this.otherPlayers[playerInfo.id] = {
+      head: enemyHead,
+      body: enemyBody
+    };
   }
 
-  private createOtherPlayer(playerInfo: any) {
-    const snakeGroup = this.add.group();
-    playerInfo.body.forEach((segment: {x: number, y: number}) => {
-      const rect = this.add.rectangle(segment.x, segment.y, this.gridSize - 2, this.gridSize - 2, playerInfo.color || 0x00ffff);
-      snakeGroup.add(rect);
-    });
-    this.otherPlayers[playerInfo.id] = snakeGroup;
-  }
+  update() {
+    // Block loop operations if local entity hasn't handshake initialized
+    if (!this.head) return;
 
-  private updateSnakeBody(snakeGroup: Phaser.GameObjects.Group, bodyData: {x: number, y: number}[], color: number) {
-    snakeGroup.clear(true, true);
-    bodyData.forEach((segment) => {
-      const rect = this.add.rectangle(segment.x, segment.y, this.gridSize - 2, this.gridSize - 2, color);
-      snakeGroup.add(rect);
+    // 1. Trace vector mapping angle pointing toward cursor/touch target
+    const pointer = this.input.activePointer;
+    const targetAngle = Phaser.Math.Angle.Between(this.head.x, this.head.y, pointer.worldX, pointer.worldY);
+    
+    // 2. Perform smooth 360-degree vector shift 
+    if (pointer.isDown || Phaser.Math.Distance.Between(this.head.x, this.head.y, pointer.worldX, pointer.worldY) > 10) {
+      this.head.x += Math.cos(targetAngle) * this.speed;
+      this.head.y += Math.sin(targetAngle) * this.speed;
+      this.head.setRotation(targetAngle); // Rotate vector SVG head artwork smoothly to face path
+    }
+
+    // 3. Document coordinate map trajectory footprint history
+    this.positionHistory.unshift({ x: this.head.x, y: this.head.y });
+    if (this.positionHistory.length > this.bodySegments.length * this.historySpacing + 1) {
+      this.positionHistory.pop();
+    }
+
+    // 4. Smoothly interpolate tail nodes down the vector history path
+    for (let i = 0; i < this.bodySegments.length; i++) {
+      const historyIndex = (i + 1) * this.historySpacing;
+      if (this.positionHistory[historyIndex]) {
+        this.bodySegments[i].setPosition(this.positionHistory[historyIndex].x, this.positionHistory[historyIndex].y);
+      }
+    }
+
+    // 5. Broadcast spatial state telemetry arrays upstream to backend
+    const bodyCoordinates = this.bodySegments.map(seg => ({ x: seg.x, y: seg.y }));
+    this.socket.emit('playerMovement', { 
+      x: this.head.x, 
+      y: this.head.y, 
+      angle: targetAngle, 
+      body: bodyCoordinates 
     });
   }
 }

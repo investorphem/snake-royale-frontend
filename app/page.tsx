@@ -1,27 +1,13 @@
 'use client';
 
 import { useState } from "react";
-import { 
-  ThirdwebProvider, 
-  ConnectButton, 
-  useActiveAccount 
-} from "thirdweb/react";
+import { ThirdwebProvider, ConnectButton, useActiveAccount } from "thirdweb/react";
 import { createThirdwebClient, defineChain } from "thirdweb";
 import dynamic from 'next/dynamic';
 
-// 1. Initialize Client & Chain for Celo Sepolia
-const client = createThirdwebClient({ 
-  clientId: "060a16f2491d7191bdd9f5bdca0d5fe6" // 🚨 Replace this!
-});
-
-// Celo Sepolia Chain ID
+const client = createThirdwebClient({ clientId: "YOUR_THIRDWEB_CLIENT_ID" });
 const celoSepolia = defineChain(11142220); 
 
-// 2. Define our Smart Contracts
-const WAGER_CONTRACT_ADDRESS = "0xF30b45003dCDe160B94962bB58FA8C2E9Ab70372"; 
-const CUSD_ADDRESS = "0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1";
-
-// Dynamically import the Phaser Game component to prevent SSR window errors
 const PhaserGame = dynamic(() => import('@/components/PhaserGame'), { ssr: false });
 
 export default function Home() {
@@ -37,36 +23,66 @@ function GameDashboard() {
   const [gameStarted, setGameStarted] = useState(false);
 
   return (
-    <main className="flex min-h-screen flex-col items-center p-8 bg-gray-900 text-white">
-      <div className="w-full max-w-4xl flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-green-400">SnakeRoyale Arena</h1>
-        
-        <ConnectButton 
-          client={client} 
-          chain={celoSepolia}
-        />
+    <main className="flex min-h-screen flex-col items-center p-4 bg-[#0B0E14] text-white font-sans">
+      
+      {/* Top Navbar */}
+      <div className="w-full max-w-md flex justify-between items-center mb-8 bg-[#151A22] p-4 rounded-2xl border border-gray-800">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center font-bold text-black">
+            CR
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-gray-200">CeloPlayer</h1>
+            <p className="text-xs text-green-400">Level 12</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 bg-[#0B0E14] px-3 py-1 rounded-full border border-gray-700">
+          <span className="text-green-400 font-bold">125.50</span>
+          <span className="text-xs text-gray-400">cUSD</span>
+        </div>
       </div>
 
       {!gameStarted ? (
-        <div className="flex flex-col items-center justify-center h-[600px] w-full bg-gray-800 rounded-xl border border-gray-700">
-          <h2 className="text-2xl mb-4">Ready to Wager?</h2>
-          <p className="text-gray-400 mb-8">Entry Fee: 1 cUSD</p>
-          
-          <button 
-            onClick={() => setGameStarted(true)}
-            disabled={!account}
-            className={`px-8 py-4 rounded-lg font-bold text-xl transition-all ${
-              account 
-                ? 'bg-green-500 hover:bg-green-600 text-white shadow-[0_0_15px_rgba(34,197,94,0.5)]' 
-                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            {account ? 'Join Arena (Approve cUSD)' : 'Connect Wallet to Play'}
-          </button>
+        <div className="w-full max-w-md flex flex-col items-center">
+          {/* Hero Branding */}
+          <div className="text-center mb-10">
+            <h2 className="text-5xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-green-300 to-green-600 drop-shadow-[0_0_15px_rgba(34,197,94,0.5)]">
+              CELO SNAKE
+            </h2>
+            <h3 className="text-3xl font-black text-yellow-500 tracking-widest mt-[-5px]">
+              •• ROYALE ••
+            </h3>
+            <p className="text-gray-400 text-sm mt-4 tracking-widest">EAT. GROW. WIN.</p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="w-full flex flex-col gap-4">
+            <button 
+              onClick={() => setGameStarted(true)}
+              disabled={!account}
+              className={`w-full py-5 rounded-xl font-black text-xl tracking-wide transition-all ${
+                account 
+                  ? 'bg-gradient-to-r from-green-400 to-green-600 text-black shadow-[0_0_20px_rgba(34,197,94,0.4)] hover:scale-105' 
+                  : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              {account ? 'PLAY NOW' : 'CONNECT WALLET TO PLAY'}
+            </button>
+            
+            {!account && (
+              <div className="flex justify-center mt-2">
+                <ConnectButton client={client} chain={celoSepolia} />
+              </div>
+            )}
+          </div>
         </div>
       ) : (
-        <div className="w-full h-[600px] border-2 border-green-500 rounded-lg overflow-hidden shadow-[0_0_30px_rgba(34,197,94,0.3)]">
-          {/* We pass the wallet address to the game so the Node.js server knows who wins */}
+        <div className="w-full max-w-4xl h-[700px] rounded-3xl overflow-hidden shadow-[0_0_40px_rgba(34,197,94,0.2)] border-4 border-[#1A222C] relative">
+          {/* Overlay UI for Game */}
+          <div className="absolute top-4 right-4 z-10 text-right pointer-events-none">
+            <p className="text-3xl font-black text-white drop-shadow-md">02:45</p>
+            <p className="text-sm font-bold text-gray-300">Kills: 3</p>
+          </div>
           <PhaserGame walletAddress={account?.address} />
         </div>
       )}
