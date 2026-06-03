@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useActiveAccount } from "thirdweb/react";
-import { prepareContractCall, sendTransaction, waitForReceipt, getContract, createThirdwebClient, defineChain } from "thirdweb";
 import { supabase } from "@/lib/supabaseClient";
 
 interface ProductItem {
@@ -64,7 +63,6 @@ export default function Shop() {
       const existingIndex = prevCart.findIndex(item => item.product.id === selectedProduct.id);
       if (existingIndex > -1) {
         const newCart = [...prevCart];
-        // Unique skins and arenas are clamped to max 1 unit per item configuration
         const clampLimit = selectedProduct.category !== 'consumable' ? 1 : newCart[existingIndex].quantity + modalQuantity;
         newCart[existingIndex].quantity = clampLimit;
         return newCart;
@@ -89,17 +87,16 @@ export default function Shop() {
     try {
       const lowerAddress = account.address.toLowerCase();
 
-      // Loop through basket array items and write modifications to Supabase database states
       for (const item of cart) {
         if (item.product.category === 'consumable') {
-          // Update stackable count fields inside inventory_items
           const { data } = await supabase
             .from('inventory_items')
             .select(item.product.id)
             .eq('wallet_address', lowerAddress)
             .single();
 
-          const currentCount = data ? Number(data[item.product.id]) || 0 : 0;
+          // FIXED: Explicitly cast data to "any" to allow runtime variable key lookup
+          const currentCount = data ? Number((data as any)[item.product.id]) || 0 : 0;
           
           await supabase
             .from('inventory_items')
@@ -109,7 +106,6 @@ export default function Shop() {
             }, { onConflict: 'wallet_address' });
 
         } else {
-          // Unique cosmetics/maps get tracked inside the generalized inventory log lines
           await supabase
             .from('inventory')
             .insert([{
@@ -120,7 +116,7 @@ export default function Shop() {
       }
 
       alert("Assets Securely Minted to Inventory Profile!");
-      setCart([]); // Reset basket state
+      setCart([]); 
     } catch (err: any) {
       console.error("Store execution pipeline failure:", err);
       alert("Checkout failure: " + err.message);
@@ -251,7 +247,6 @@ export default function Shop() {
 
             <p className="text-xs text-gray-400 mb-6 leading-relaxed border-t border-white/5 pt-3">{selectedProduct.description}</p>
 
-            {/* Config controls show contextually depending on consumable types */}
             {selectedProduct.category === 'consumable' ? (
               <div className="mb-6 flex flex-col gap-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Configure Quantity</label>
