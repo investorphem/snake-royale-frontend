@@ -3,13 +3,11 @@
 import { useState, useEffect } from "react";
 import { ThirdwebProvider, ConnectButton, useActiveAccount, useConnect, useReadContract } from "thirdweb/react";
 import { createThirdwebClient, defineChain, prepareContractCall, sendTransaction, waitForReceipt, getContract, readContract } from "thirdweb";
-import { createWallet, inAppWallet } from "thirdweb/wallets";
 import dynamic from 'next/dynamic';
 import { supabase } from "@/lib/supabaseClient";
 
 // Component Panel Imports
 import ProfileSidebar from "@/components/ProfileSidebar";
-import FeatureGrid from "@/components/FeatureGrid";
 import MobileNav from "@/components/MobileNav";
 import Shop from "@/components/Shop";
 import Inventory from "@/components/Inventory";
@@ -23,16 +21,17 @@ const client = createThirdwebClient({
 const gameNetwork = defineChain(11142220); 
 const mainnetChain = defineChain(42220);       
 
+// Note: Celo USDC is 6 decimals. Real Celo cUSD is 18 decimals. 
+// The math in the transactions below will automatically adapt based on this array!
 const STABLECOINS = [
-  { symbol: "cUSD", address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", decimals: 6, color: "text-white" },
+  { symbol: "USDC", address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", decimals: 6, color: "text-blue-400" },
+  { symbol: "cUSD", address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", decimals: 18, color: "text-green-400" },
   { symbol: "USDT", address: "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e", decimals: 6, color: "text-teal-400" },
 ];
 
 const SNAKE_WAGER_ADDRESS = "0xF30b45003dCDe160B94962bB58FA8C2E9Ab70372";
-const WAGER_CURRENCY_ADDRESS = "0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1"; 
 
 const wagerContract = getContract({ client, chain: gameNetwork, address: SNAKE_WAGER_ADDRESS });
-const wagerCurrencyContract = getContract({ client, chain: gameNetwork, address: WAGER_CURRENCY_ADDRESS });
 
 const PhaserGame = dynamic(() => import('@/components/PhaserGame'), { ssr: false });
 
@@ -46,11 +45,16 @@ export default function Home() {
 
 function SnakeRoyaleApp() {
   const account = useActiveAccount();
-  
+
   const [appState, setAppState] = useState<'menu' | 'create' | 'join' | 'playing'>('menu');
   const [activeTab, setActiveTab] = useState<'home' | 'shop' | 'inventory' | 'clans' | 'profile' | 'tournament'>('home');
   const [txStatus, setTxStatus] = useState('');
-  
+
+  // ========================================================
+  // NEW: GLOBAL SELECTED COIN STATE
+  // ========================================================
+  const [selectedCoin, setSelectedCoin] = useState(STABLECOINS[0]);
+
   const [roomIdInput, setRoomIdInput] = useState('1');
   const [feeInput, setFeeInput] = useState('1');
 
@@ -70,7 +74,7 @@ function SnakeRoyaleApp() {
         setPlayerProfile(null);
         return;
       }
-      
+
       const lowerAddress = account.address.toLowerCase();
 
       try {
@@ -91,7 +95,7 @@ function SnakeRoyaleApp() {
         console.error("Identity matrix lookup failure:", err);
       }
     };
-    
+
     evaluatePlayerAccountPresence();
   }, [account?.address, activeTab, appState]);
 
@@ -151,20 +155,106 @@ function SnakeRoyaleApp() {
 
   useEffect(() => { if (appState === 'join') fetchLiveRooms(); }, [appState]);
 
-  const handleCreateRoom = async () => { /* ... (Same as previous) ... */ };
-  const handleJoinRoom = async (selectedRoomId: string, requiredFee: string) => { /* ... (Same as previous) ... */ };
-  const handleGameOver = async (finalScore: number) => { /* ... (Same as previous) ... */ };
+  // ========================================================
+  // REAL WEB3 WAGER LOGIC (Dynamic Tokens + Gas Abstraction)
+  // ========================================================
+  const handleCreateRoom = async () => {
+    if (!account) return alert("Wallet not connected");
+    if (Number(feeInput) <= 0) return alert("Invalid fee amount");
+
+    try {
+      setTxStatus(`Awaiting Escrow Deposit...`);
+      
+      const currencyContract = getContract({ 
+        client, 
+        chain: mainnetChain, 
+        address: selectedCoin.address 
+      });
+
+      const multiplier = 10n ** BigInt(selectedCoin.decimals - 2);
+      const wagerInWei = BigInt(Math.round(Number(feeInput) * 100)) * multiplier;
+
+      const depositTx = prepareContractCall({
+        contract: currencyContract,
+        method: "function transfer(address to, uint256 value) returns (bool)",
+        params: [SNAKE_WAGER_ADDRESS, wagerInWei]
+      });
+
+      // Execute transaction AND pay gas in the selected stablecoin!
+      const { transactionHash } = await sendTransaction({
+        transaction: {
+          ...depositTx,
+          feeCurrency: selectedCoin.address
+        } as any,
+        account
+      });
+
+      await waitForReceipt({ transactionHash, client, chain: mainnetChain });
+      
+      setTxStatus('');
+      setAppState('playing');
+    } catch (error) {
+      console.error(error);
+      setTxStatus('');
+      alert("Transaction failed or was cancelled.");
+    }
+  };
+
+  const handleJoinRoom = async (selectedRoomId: string, requiredFee: string) => {
+    if (!account) return alert("Wallet not connected");
+    
+    try {
+      setTxStatus(`Awaiting Escrow Deposit...`);
+      
+      const currencyContract = getContract({ 
+        client, 
+        chain: mainnetChain, 
+        address: selectedCoin.address 
+      });
+
+      const multiplier = 10n ** BigInt(selectedCoin.decimals - 2);
+      const wagerInWei = BigInt(Math.round(Number(requiredFee) * 100)) * multiplier;
+
+      const depositTx = prepareContractCall({
+        contract: currencyContract,
+        method: "function transfer(address to, uint256 value) returns (bool)",
+        params: [SNAKE_WAGER_ADDRESS, wagerInWei]
+      });
+
+      // Execute transaction AND pay gas in the selected stablecoin!
+      const { transactionHash } = await sendTransaction({
+        transaction: {
+          ...depositTx,
+          feeCurrency: selectedCoin.address
+        } as any,
+        account
+      });
+
+      await waitForReceipt({ transactionHash, client, chain: mainnetChain });
+      
+      setTxStatus('');
+      setAppState('playing');
+    } catch (error) {
+      console.error(error);
+      setTxStatus('');
+      alert("Transaction failed or was cancelled.");
+    }
+  };
+
+  const handleGameOver = async (finalScore: number) => {
+    setAppState('menu');
+  };
 
   // Calculate Level for Header Avatar
   const playerLevel = Math.floor((playerProfile?.xp || 0) / 1000) + 1;
-  const xpProgress = ((playerProfile?.xp || 0) % 1000) / 10; // Percentage 0-100
+  const xpProgress = ((playerProfile?.xp || 0) % 1000) / 10; 
 
   return (
     <main className="min-h-screen bg-[#06090E] text-white font-sans overflow-x-hidden selection:bg-[#84cc16] selection:text-black flex flex-col items-center">
-      
+
       {/* PREMIUM APP HEADER */}
       <nav className="w-full max-w-md mx-auto flex justify-between items-center p-4 bg-[#06090E] fixed top-0 z-50">
-        
+
         {/* LEFT: Player Identity & Level */}
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('profile')}>
            <div className="w-12 h-12 relative flex items-center justify-center bg-gradient-to-b from-[#84cc16] to-[#166534]" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}>
@@ -172,7 +262,7 @@ function SnakeRoyaleApp() {
                {playerProfile ? '💀' : '👤'}
              </div>
            </div>
-           
+
            <div className="flex flex-col justify-center">
              <span className="text-white font-bold text-sm leading-tight shadow-sm">
                {playerProfile?.username || 'Guest Agent'}
@@ -185,37 +275,39 @@ function SnakeRoyaleApp() {
              </div>
            </div>
         </div>
-        
+
         {/* RIGHT: Currency Wallet Pill */}
         <div className="flex items-center">
-          <MiniPayNav />
+          {/* PASSED DYNAMIC STATE DOWN TO NAV */}
+          <MiniPayNav selectedCoin={selectedCoin} setSelectedCoin={setSelectedCoin} />
         </div>
       </nav>
 
-      {/* DYNAMIC APP VIEWPORT (Max-Width restricted for App Feel) */}
+      {/* DYNAMIC APP VIEWPORT */}
       <div className="pt-24 pb-32 px-4 w-full max-w-md mx-auto flex-1 flex flex-col">
-        
-        {activeTab === 'shop' && <Shop />}
+
+        {/* PASSED DYNAMIC STATE DOWN TO SHOP */}
+        {activeTab === 'shop' && <Shop selectedCoin={selectedCoin} />}
         {activeTab === 'inventory' && <Inventory />}
         {activeTab === 'clans' && <Clans />}
         {activeTab === 'tournament' && <Tournament />}
         {activeTab === 'profile' && <ProfileSidebar accountAddress={account?.address} />}
-        
+
         {activeTab === 'home' && (
           <>
             {appState === 'playing' ? (
               <div className="w-full aspect-[9/16] bg-black rounded-3xl overflow-hidden border border-[#22c55e]/30 shadow-[0_0_30px_rgba(34,197,94,0.15)] relative">
-                <PhaserGame walletAddress={account?.address} arenaTheme={equippedArena} onGameOver={handleGameOver} />
+                <PhaserGame walletAddress={account?.address} onGameOver={handleGameOver} />
                 <button onClick={() => setAppState('menu')} className="absolute top-4 left-4 bg-black/50 hover:bg-black/80 text-white px-4 py-2 rounded-full backdrop-blur-sm transition-all border border-white/10 text-xs font-bold">
                   Quit
                 </button>
               </div>
             ) : (
               <div className="w-full flex flex-col items-center flex-1 justify-center animate-fade-in">
-                
+
                 {appState === 'menu' && (
                   <div className="w-full flex flex-col items-center text-center">
-                    
+
                     {/* PREMIUM LOGO ASSET AREA */}
                     <div className="relative w-full aspect-square max-w-[280px] flex flex-col items-center justify-center mb-6">
                       <div className="text-8xl drop-shadow-[0_0_40px_rgba(132,204,22,0.4)] relative -mt-4 animate-bounce" style={{ animationDuration: '4s' }}>
@@ -227,10 +319,10 @@ function SnakeRoyaleApp() {
                         <span className="text-yellow-400 text-5xl drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">ROYALE</span>
                       </h1>
                     </div>
-                    
+
                     {/* PREMIUM INTERFACE BUTTONS */}
                     <div className="flex flex-col gap-3 w-full">
-                      
+
                       <button 
                         onClick={() => setAppState('playing')}
                         className="w-full bg-gradient-to-b from-[#a3e635] to-[#65a30d] text-black rounded-2xl py-4 font-black text-2xl shadow-[0_6px_0_#3f6212] active:shadow-[0_0px_0_#3f6212] active:translate-y-1.5 transition-all flex flex-col items-center"
@@ -265,27 +357,27 @@ function SnakeRoyaleApp() {
                   </div>
                 )}
 
-                {/* Sub-menu states (Join/Create) remain functional but adapt to the mobile column width */}
                 {appState === 'create' && (
                   <div className="w-full bg-[#111722] p-6 rounded-3xl border border-white/5 flex flex-col animate-fade-in text-sm font-semibold">
-                    {/* Same UI code as previous versions for forms... */}
                     <div className="flex justify-between items-center mb-6">
                       <h3 className="text-xl font-black tracking-wide">Host Wager Configuration</h3>
                       <button onClick={() => setAppState('menu')} className="text-gray-500 hover:text-white">✕</button>
                     </div>
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Room Index</label>
                     <input type="number" value={roomIdInput} onChange={e => setRoomIdInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-4 outline-none focus:border-indigo-500 font-mono" />
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Target Entry Fee</label>
+                    
+                    {/* Updated to display dynamic stablecoin symbol */}
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Target Entry Fee ({selectedCoin.symbol})</label>
                     <input type="number" value={feeInput} onChange={e => setFeeInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-8 outline-none focus:border-indigo-500 font-mono" />
-                    <button onClick={handleCreateRoom} disabled={!!txStatus} className="w-full py-4 rounded-xl font-black text-sm bg-indigo-600 hover:bg-indigo-500 transition-all uppercase tracking-wider">
-                      {txStatus || 'PUBLISH ESCROW'}
+                    
+                    <button onClick={handleCreateRoom} disabled={!!txStatus} className="w-full py-4 rounded-xl font-black text-sm bg-indigo-600 hover:bg-indigo-500 transition-all uppercase tracking-wider flex items-center justify-center">
+                      {txStatus ? <><span className="animate-spin mr-2">⚙️</span> {txStatus}</> : 'PUBLISH ESCROW'}
                     </button>
                   </div>
                 )}
 
                 {appState === 'join' && (
                   <div className="w-full bg-[#111722] p-6 rounded-3xl border border-white/5 flex flex-col animate-fade-in">
-                    {/* Join room UI mapped to fit small container */}
                     <div className="flex justify-between items-center mb-6">
                       <h3 className="text-xl font-black tracking-wide">Live Arenas</h3>
                       <button onClick={() => setAppState('menu')} className="text-gray-500 hover:text-white text-lg">✕</button>
@@ -303,10 +395,10 @@ function SnakeRoyaleApp() {
                           <div key={room.roomId} className="bg-[#0B0F17] border border-white/10 rounded-xl p-4 flex justify-between items-center group hover:border-green-500/50 transition-all">
                             <div>
                               <h4 className="font-bold text-white text-sm">Room #{room.roomId}</h4>
-                              <span className="font-black text-green-400 text-xs">{room.entryFee} Stake</span>
+                              <span className="font-black text-green-400 text-xs">{room.entryFee} {selectedCoin.symbol} Stake</span>
                             </div>
                             <button onClick={() => handleJoinRoom(room.roomId.toString(), room.entryFee)} disabled={!!txStatus} className="bg-green-600 hover:bg-green-500 text-white font-black px-4 py-2 rounded-lg text-xs uppercase transition-all">
-                              ENTER
+                              {txStatus ? '...' : 'ENTER'}
                             </button>
                           </div>
                         ))}
@@ -319,7 +411,7 @@ function SnakeRoyaleApp() {
           </>
         )}
       </div>
-      
+
       {/* PERSISTENT UNIVERSAL FOOTER */}
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
@@ -361,10 +453,9 @@ function SnakeRoyaleApp() {
 // ========================================================
 // PREMIUM HEADER CURRENCY PILL & CONNECT BUTTON
 // ========================================================
-function MiniPayNav() {
+function MiniPayNav({ selectedCoin, setSelectedCoin }: { selectedCoin: any, setSelectedCoin: any }) {
   const account = useActiveAccount();
   const [mounted, setMounted] = useState(false);
-  const [selectedCoin, setSelectedCoin] = useState(STABLECOINS[0]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
@@ -383,25 +474,20 @@ function MiniPayNav() {
   }
 
   return (
-    <div className="relative group">
+    <div className="relative group z-50">
       <div 
         onClick={() => setDropdownOpen(!dropdownOpen)}
         className="cursor-pointer bg-[#1A1F2E] border border-white/5 px-3 py-2 rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all hover:bg-[#252b3d] select-none"
       >
-        {/* Token Icon Placeholders */}
         <div className="w-5 h-5 bg-gray-700 rounded-full flex items-center justify-center text-[10px]">🪙</div>
-        
-        {/* Balance Fetcher */}
         <TokenBadge token={selectedCoin} accountAddress={account.address} />
-
-        {/* The Green '+' Button from mockup */}
         <div className="w-5 h-5 bg-[#84cc16] rounded-full flex items-center justify-center text-black font-black leading-none ml-1 shadow-[0_0_10px_rgba(132,204,22,0.4)]">
           +
         </div>
       </div>
 
       {dropdownOpen && (
-        <div className="absolute right-0 top-full mt-2 w-full min-w-[150px] bg-[#1A1F2E] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 flex flex-col">
+        <div className="absolute right-0 top-full mt-2 w-full min-w-[150px] bg-[#1A1F2E] border border-white/10 rounded-xl overflow-hidden shadow-2xl flex flex-col">
           {STABLECOINS.map((token) => (
             <button key={token.address} onClick={() => { setSelectedCoin(token); setDropdownOpen(false); }} className="text-left px-4 py-3 text-xs font-black uppercase tracking-widest transition-colors border-b border-white/5 last:border-0 hover:bg-white/5 text-white flex items-center gap-2">
               <span className={token.color}>{token.symbol}</span>
@@ -417,7 +503,7 @@ function TokenBadge({ token, accountAddress }: { token: any, accountAddress: str
   const contract = getContract({ client, chain: mainnetChain, address: token.address });
   const { data } = useReadContract({ contract, method: "function balanceOf(address) view returns (uint256)", params: [accountAddress] });
   const formattedBalance = data ? (Number(data) / 10 ** token.decimals).toFixed(2) : "0.00";
-  
+
   return (
     <div className="flex flex-col items-start leading-none justify-center">
        <span className="text-white font-black text-[11px] font-mono">{formattedBalance}</span>
