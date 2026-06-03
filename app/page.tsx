@@ -29,7 +29,7 @@ const STABLECOINS = [
   { symbol: "USDT", address: "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e", decimals: 6, color: "text-teal-400" },
 ];
 
-const SNAKE_WAGER_ADDRESS = "0xF30b45003dCDe160B94962bB58FA8C2E9Ab70372";
+const SNAKE_WAGER_ADDRESS = "0xec24bAfBc989a9bE5f6F0eAD8848753B5E4aE0B6";
 
 const wagerContract = getContract({ client, chain: gameNetwork, address: SNAKE_WAGER_ADDRESS });
 
@@ -171,7 +171,7 @@ function SnakeRoyaleApp() {
         address: selectedCoin.address 
       });
 
-      const multiplier = 10n ** BigInt(selectedCoin.decimals - 2);
+      const multiplier = BigInt(10) ** BigInt(selectedCoin.decimals - 2);
       const wagerInWei = BigInt(Math.round(Number(feeInput) * 100)) * multiplier;
 
       const depositTx = prepareContractCall({
@@ -212,7 +212,7 @@ function SnakeRoyaleApp() {
         address: selectedCoin.address 
       });
 
-      const multiplier = 10n ** BigInt(selectedCoin.decimals - 2);
+      const multiplier = BigInt(10) ** BigInt(selectedCoin.decimals - 2);
       const wagerInWei = BigInt(Math.round(Number(requiredFee) * 100)) * multiplier;
 
       const depositTx = prepareContractCall({
