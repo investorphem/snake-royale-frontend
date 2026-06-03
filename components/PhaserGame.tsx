@@ -37,17 +37,21 @@ class AudioSynth {
   playEpicSpawn() {
     this.init();
     if (!this.ctx) return;
-    const now = this.ctx.currentTime;
+    
+    // FIX: Save the context to a local constant so TypeScript knows it is NOT null inside the loop
+    const ctx = this.ctx; 
+
+    const now = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.50]; 
     notes.forEach((freq, index) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, now + (index * 0.04));
       gain.gain.setValueAtTime(0.15, now + (index * 0.04));
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
       osc.connect(gain);
-      gain.connect(this.ctx.destination);
+      gain.connect(ctx.destination);
       osc.start(now + (index * 0.04));
       osc.stop(now + 0.4);
     });
@@ -130,7 +134,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       this.load.image('classic_head', '/assets/classic_head.png');
       this.load.image('classic_body', '/assets/classic_body.png');
       this.load.image('classic_tail', '/assets/classic_tail.png'); // NEW: Tail Asset
-      
+
       this.load.image('food_normal', '/assets/food_normal.png');
       this.load.image('food_epic', '/assets/food_epic.png');
       this.load.image('food_blue', '/assets/food_blue.png');
@@ -152,7 +156,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
     function create(this: Phaser.Scene) {
       this.physics.world.setBounds(0, 0, 2000, 2000);
-      
+
       // REPLACED GRID WITH PREMIUM SEAMLESS ARENA TEXTURE
       this.add.tileSprite(1000, 1000, 2000, 2000, 'arena_default').setDepth(0);
 
@@ -287,10 +291,10 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       // Add segments, ensuring the final piece is ALWAYS the tail texture
       for(let i=0; i<5; i++) {
         const lastSegment = snakeBody[snakeBody.length - 1];
-        
+
         // Convert old tail into a normal body piece
         lastSegment.setTexture('classic_body');
-        
+
         // Push a new tail piece to the very end
         const newTail = scene.add.sprite(lastSegment.x, lastSegment.y, 'classic_tail');
         newTail.setDepth(lastSegment.depth - 1);
