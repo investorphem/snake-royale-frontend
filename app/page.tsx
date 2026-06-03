@@ -13,7 +13,7 @@ import Inventory from "@/components/Inventory";
 import Clans from "@/components/Clans";
 
 const client = createThirdwebClient({ 
-  clientId: "3yd744Q5LPJ3BC1ndknBd0JLotNiKe4Dy-x2aqYEXKfNkzBLo3kXQL-5u0P3aMOX17uEdwClXg_FRKf_RSe09w" 
+  clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID || "3yd744Q5LPJ3BC1ndknBd0JLotNiKe4Dy-x2aqYEXKfNkzBLo3kXQL-5u0P3aMOX17uEdwClXg_FRKf_RSe09w" 
 }); 
 
 const gameNetwork = defineChain(11142220); // Testnet for development, swap to Mainnet later
@@ -26,7 +26,7 @@ const STABLECOINS = [
 ];
 
 const SNAKE_WAGER_ADDRESS = "0xF30b45003dCDe160B94962bB58FA8C2E9Ab70372";
-const WAGER_CURRENCY_ADDRESS = "0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1"; // Currently testing with Sepolia cUSD
+const WAGER_CURRENCY_ADDRESS = "0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1"; 
 
 const wagerContract = getContract({ client, chain: gameNetwork, address: SNAKE_WAGER_ADDRESS });
 const wagerCurrencyContract = getContract({ client, chain: gameNetwork, address: WAGER_CURRENCY_ADDRESS });
@@ -81,9 +81,7 @@ function SnakeRoyaleApp() {
   };
 
   useEffect(() => {
-    if (appState === 'join') {
-      fetchLiveRooms();
-    }
+    if (appState === 'join') fetchLiveRooms();
   }, [appState]);
 
   const handleCreateRoom = async () => {
@@ -145,30 +143,19 @@ function SnakeRoyaleApp() {
     }
   };
 
-  // --- DATABASE TELEMETRY SYNC ---
+  // --- SECURE BACKEND TELEMETRY SYNC ---
   const handleGameOver = async (finalScore: number) => {
     if (!account?.address) return;
     try {
-      const { supabase } = await import("@/lib/supabaseClient");
-      const lowerAddress = account.address.toLowerCase();
-
-      const { data: player } = await supabase
-        .from('players')
-        .select('xp, games_played')
-        .eq('wallet_address', lowerAddress)
-        .single();
-
-      if (player) {
-        await supabase
-          .from('players')
-          .update({
-            xp: (player.xp || 0) + finalScore,
-            games_played: (player.games_played || 0) + 1
-          })
-          .eq('wallet_address', lowerAddress);
-        
-        console.log(`Saved ${finalScore} XP to global profile!`);
-      }
+      await fetch('/api/player/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          walletAddress: account.address,
+          score: finalScore 
+        })
+      });
+      console.log(`Successfully synced ${finalScore} XP via secure backend.`);
     } catch (error) {
       console.error("Failed to sync match data:", error);
     }
@@ -350,17 +337,20 @@ function SnakeRoyaleApp() {
   );
 }
 
-// --- HYDRATION FIX & SAFE DATABASE ONBOARDING ---
+// --- DROPDOWN NAVIGATION & HYDRATION FIX ---
 function MiniPayNav() {
   const account = useActiveAccount();
   const { connect } = useConnect();
   const [mounted, setMounted] = useState(false);
   const [isMobileWallet, setIsMobileWallet] = useState(true);
+  
+  // New state for handling the stablecoin dropdown
+  const [selectedCoin, setSelectedCoin] = useState(STABLECOINS[0]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  // 1. Wait for client to mount before detecting wallet to prevent hydration errors
+  // 1. Hydration Fix
   useEffect(() => {
     setMounted(true);
-    
     const checkWallet = setTimeout(() => {
       if (typeof window !== "undefined" && (window as any).ethereum) {
         connect(createWallet("injected" as any)).catch(() => setIsMobileWallet(false));
@@ -368,40 +358,26 @@ function MiniPayNav() {
         setIsMobileWallet(false);
       }
     }, 1500);
-
     return () => clearTimeout(checkWallet);
   }, [connect]);
 
-  // 2. Safely sync player to Supabase (Only insert if they do NOT exist)
+  // 2. SECURE ONBOARDING SYNC
   useEffect(() => {
     const onboardPlayer = async () => {
       if (!account?.address) return;
-      const lowerAddress = account.address.toLowerCase();
-
       try {
-        const { supabase } = await import("@/lib/supabaseClient");
-        
-        // Check if user already exists
-        const { data: existingUser } = await supabase
-          .from('players')
-          .select('wallet_address')
-          .eq('wallet_address', lowerAddress)
-          .single();
-
-        // If they don't exist, create a default profile
-        if (!existingUser) {
-          await supabase
-            .from('players')
-            .insert([{ wallet_address: lowerAddress, username: `Player_${lowerAddress.slice(2, 7)}` }]);
-        }
+        await fetch('/api/player/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ walletAddress: account.address })
+        });
       } catch (err) {
-        console.error("Failed to onboard player:", err);
+        console.error("Failed to securely onboard player:", err);
       }
     };
     if (account?.address) onboardPlayer();
   }, [account?.address]);
 
-  // 3. Conditional Render States
   if (!mounted) return <div className="text-xs text-gray-500 font-bold animate-pulse">Loading Interface...</div>;
 
   if (!account) {
@@ -413,10 +389,37 @@ function MiniPayNav() {
   }
 
   return (
-    <div className="flex gap-2 flex-wrap justify-end">
-      {STABLECOINS.map((token) => (
-        <TokenBadge key={token.symbol} token={token} accountAddress={account.address} />
-      ))}
+    <div className="relative group">
+      {/* Dropdown Toggle */}
+      <div 
+        onClick={() => setDropdownOpen(!dropdownOpen)}
+        className="cursor-pointer flex items-center gap-1 hover:ring-1 hover:ring-white/10 rounded-lg transition-all"
+      >
+        <TokenBadge token={selectedCoin} accountAddress={account.address} />
+        <div className="bg-[#0B0F17] border border-white/5 px-2 py-1.5 rounded-lg flex items-center justify-center shadow-[0_0_10px_rgba(255,255,255,0.02)]">
+          <span className={`text-gray-500 text-[10px] transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`}>▼</span>
+        </div>
+      </div>
+
+      {/* Dropdown Menu */}
+      {dropdownOpen && (
+        <div className="absolute right-0 top-full mt-2 w-full min-w-[140px] bg-[#0B0F17] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 flex flex-col">
+          {STABLECOINS.map((token) => (
+            <button
+              key={token.symbol}
+              onClick={() => {
+                setSelectedCoin(token);
+                setDropdownOpen(false);
+              }}
+              className={`text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-colors border-b border-white/5 last:border-0 hover:bg-white/5 ${
+                selectedCoin.symbol === token.symbol ? 'bg-white/5 text-white' : 'text-gray-500'
+              }`}
+            >
+              <span className={token.color}>{token.symbol}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
