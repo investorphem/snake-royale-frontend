@@ -5,258 +5,283 @@ import { useActiveAccount } from "thirdweb/react";
 import { prepareContractCall, sendTransaction, waitForReceipt, getContract, createThirdwebClient, defineChain } from "thirdweb";
 import { supabase } from "@/lib/supabaseClient";
 
-// 1. Setup Client & Chain
-const client = createThirdwebClient({ 
-  clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID || "3yd744Q5LPJ3BC1ndknBd0JLotNiKe4Dy-x2aqYEXKfNkzBLo3kXQL-5u0P3aMOX17uEdwClXg_FRKf_RSe09w" 
-}); 
-const celoMainnet = defineChain(42220);
+interface ProductItem {
+  id: string;
+  name: string;
+  category: 'consumable' | 'skin' | 'arena';
+  description: string;
+  price: number;
+  icon: string;
+  rarity: 'Common' | 'Rare' | 'Epic' | 'Legendary';
+  badgeColor: string;
+}
 
-// 2. Stablecoin Addresses & Game Treasury
-const TREASURY_ADDRESS = "0xec24bAfBc989a9bE5f6F0eAD8848753B5E4aE0B6";
-
-const CURRENCIES = {
-  USDC: { address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", decimals: 6 },
-  USDT: { address: "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e", decimals: 6 },
-  USDm: { address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", decimals: 18 }
-} as const;
-
-type CurrencySymbol = keyof typeof CURRENCIES;
-
-// Asset Catalogs
-const MASTER_SKINS = [
-  { id: 'golden', name: 'Golden King', rarity: 'Legendary', price: 25.00, icon: '👑', color: 'from-yellow-300 to-yellow-600' },
-  { id: 'cyber', name: 'Cyber Snake', rarity: 'Epic', price: 15.00, icon: '🤖', color: 'from-purple-400 to-purple-600' },
-  { id: 'magma', name: 'Magma Flow', rarity: 'Epic', price: 12.50, icon: '🌋', color: 'from-orange-500 to-red-600' }
+const CATALOG: ProductItem[] = [
+  // Consumables Category
+  { id: 'speed', name: 'Turbo Velocity Charge', category: 'consumable', description: 'Gives +100% velocity boost for mid-game escaping.', price: 2.00, icon: '⚡', rarity: 'Common', badgeColor: 'bg-zinc-800 text-gray-300' },
+  { id: 'shield', name: 'Aegis Quantum Shield', category: 'consumable', description: 'Deploys invincibility barrier to absorb single wall collisions.', price: 3.50, icon: '🛡️', rarity: 'Rare', badgeColor: 'bg-emerald-950 text-emerald-400 border border-emerald-500/20' },
+  { id: 'magnet', name: 'Singularity Orbs Magnet', category: 'consumable', description: 'Generates deep suction pull vacuum drawing close proximity food.', price: 5.00, icon: '🧲', rarity: 'Epic', badgeColor: 'bg-purple-950 text-purple-400 border border-purple-500/20' },
+  // Skins Category
+  { id: 'golden', name: 'Midas Golden King Skin', category: 'skin', description: 'Permits ultimate on-chain prestige. Emits radiant particles.', price: 25.00, icon: '👑', rarity: 'Legendary', badgeColor: 'bg-yellow-950 text-yellow-400 border border-yellow-500/20' },
+  { id: 'cyber', name: 'Synthetic Cyber Snake Skin', category: 'skin', description: 'Glitch-wave aesthetic matching specialized terminal runs.', price: 15.00, icon: '🤖', rarity: 'Epic', badgeColor: 'bg-purple-950 text-purple-400 border border-purple-500/20' },
+  { id: 'magma', name: 'Molten Magma Flow Skin', category: 'skin', description: 'Animated volcanic plate textures responding dynamically.', price: 12.50, icon: '🌋', rarity: 'Epic', badgeColor: 'bg-orange-950 text-orange-400 border border-orange-500/20' },
+  // Arenas Category
+  { id: 'arena_cyber', name: 'Neon Matrix Domain', category: 'arena', description: 'Unlocks complete multiplayer wraparound boundary map rights.', price: 30.00, icon: '🌐', rarity: 'Legendary', badgeColor: 'bg-yellow-950 text-yellow-400 border border-yellow-500/20' },
+  { id: 'arena_void', name: 'Abyssal Gravity Space Map', category: 'arena', description: 'Enables dark space mapping featuring center drag mechanics.', price: 20.00, icon: '🌌', rarity: 'Legendary', badgeColor: 'bg-yellow-950 text-yellow-400 border border-yellow-500/20' },
+  { id: 'arena_toxic', name: 'Radioactive Sludge Sector', category: 'arena', description: 'Mutates target layouts spawning hazardous shrink green fields.', price: 10.00, icon: '☣️', rarity: 'Rare', badgeColor: 'bg-emerald-950 text-emerald-400 border border-emerald-500/20' }
 ];
 
-const POWER_UPS = [
-  { id: 'speed', name: 'Speed Boost', desc: 'Double your movement velocity for 5 seconds.', price: 2.00, icon: '⚡', color: 'from-yellow-400 to-amber-500' },
-  { id: 'shield', name: 'Invincibility', desc: 'Survive head-on wall collisions safely.', price: 5.00, icon: '🛡️', color: 'from-blue-400 to-indigo-600' },
-  { id: 'magnet', name: 'Food Magnet', desc: 'Pull distant energy orbs automatically.', price: 3.00, icon: '🧲', color: 'from-purple-400 to-fuchsia-600' }
-];
-
-// NEW: Premium Arenas
-const PREMIUM_ARENAS = [
-  { id: 'arena_cyber', name: 'Neon Matrix', rarity: 'Legendary', price: 50.00, icon: '🌐', color: 'from-blue-500 to-blue-900' },
-  { id: 'arena_magma', name: 'Volcanic Fissure', rarity: 'Epic', price: 40.00, icon: '🔥', color: 'from-red-600 to-orange-900' },
-  { id: 'arena_toxic', name: 'Radioactive Sludge', rarity: 'Rare', price: 30.00, icon: '☣️', color: 'from-green-500 to-emerald-900' },
-  { id: 'arena_void', name: 'Abyssal Space', rarity: 'Legendary', price: 55.00, icon: '🌌', color: 'from-purple-600 to-indigo-900' },
-  { id: 'arena_temple', name: 'Golden Sands', rarity: 'Epic', price: 45.00, icon: '🏛️', color: 'from-yellow-600 to-amber-900' }
-];
+interface CartItem {
+  product: ProductItem;
+  quantity: number;
+}
 
 export default function Shop() {
   const account = useActiveAccount();
+  const [activeCategory, setActiveCategory] = useState<'all' | 'consumable' | 'skin' | 'arena'>('all');
   
-  // State
-  const [ownedItems, setOwnedItems] = useState<string[]>([]); // Holds both skins AND arenas
-  const [powerUpBalances, setPowerUpBalances] = useState<Record<string, number>>({ speed: 0, shield: 0, magnet: 0 });
-  const [quantities, setQuantities] = useState<Record<string, number>>({ speed: 1, shield: 1, magnet: 1 });
-  
-  const [preferredCurrency, setPreferredCurrency] = useState<CurrencySymbol>('USDC');
-  const [processingId, setProcessingId] = useState<string | null>(null);
-  const [txStatus, setTxStatus] = useState('');
+  // Shopping Cart & Config Modal states
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<ProductItem | null>(null);
+  const [modalQuantity, setModalQuantity] = useState<number>(1);
+  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
 
-  const fetchInventory = async () => {
-    if (!account?.address) return;
-    const lowerAddress = account.address.toLowerCase();
+  // Computed Values
+  const totalCartCost = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const totalCartUnits = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-    // Fetch Unique Items (Skins & Arenas)
-    const { data: uniqueData } = await supabase.from('inventory').select('item_id').eq('wallet_address', lowerAddress);
-    if (uniqueData) setOwnedItems(uniqueData.map(i => i.item_id));
+  const filteredCatalog = CATALOG.filter(item => activeCategory === 'all' || item.category === activeCategory);
 
-    // Fetch Stackable Power-ups
-    const { data: powerData } = await supabase.from('inventory_items').select('speed, shield, magnet').eq('wallet_address', lowerAddress).single();
-    if (powerData) setPowerUpBalances({ speed: powerData.speed || 0, shield: powerData.shield || 0, magnet: powerData.magnet || 0 });
+  const handleOpenConfigModal = (product: ProductItem) => {
+    setSelectedProduct(product);
+    setModalQuantity(1); // Reset counter
   };
 
-  useEffect(() => { fetchInventory(); }, [account?.address]);
+  const handleAddToCart = () => {
+    if (!selectedProduct) return;
+    
+    setCart(prevCart => {
+      const existingIndex = prevCart.findIndex(item => item.product.id === selectedProduct.id);
+      if (existingIndex > -1) {
+        const newCart = [...prevCart];
+        // Unique skins and arenas are clamped to max 1 unit per item configuration
+        const clampLimit = selectedProduct.category !== 'consumable' ? 1 : newCart[existingIndex].quantity + modalQuantity;
+        newCart[existingIndex].quantity = clampLimit;
+        return newCart;
+      }
+      return [...prevCart, { product: selectedProduct, quantity: modalQuantity }];
+    });
 
-  const updateQuantity = (id: string, delta: number) => {
-    setQuantities(prev => ({ ...prev, [id]: Math.max(1, (prev[id] || 1) + delta) }));
+    setSelectedProduct(null); // Dismiss Modal
   };
 
-  const handlePurchase = async (itemId: string, unitPrice: number, isPowerUp: boolean = false) => {
-    if (!account?.address) return alert("Please connect your wallet first.");
-    
-    const quantity = isPowerUp ? (quantities[itemId] || 1) : 1;
-    const totalPrice = unitPrice * quantity;
-    
-    setProcessingId(itemId);
+  const handleRemoveFromCart = (productId: string) => {
+    setCart(prev => prev.filter(item => item.product.id !== productId));
+  };
+
+  const handleClearCart = () => setCart([]);
+
+  const handleExecuteCartCheckout = async () => {
+    if (!account?.address) return alert("Please authenticate your wallet to execute trades.");
+    if (cart.length === 0) return;
+
+    setIsProcessingCheckout(true);
     try {
-      const currency = CURRENCIES[preferredCurrency];
-      const tokenContract = getContract({ client, chain: celoMainnet, address: currency.address });
-      const priceInSmallestUnit = BigInt(Math.round(totalPrice * (10 ** currency.decimals)));
+      const lowerAddress = account.address.toLowerCase();
 
-      setTxStatus(`Authorizing ${totalPrice.toFixed(2)} ${preferredCurrency}...`);
-      
-      const transferTx = prepareContractCall({
-        contract: tokenContract,
-        method: "function transfer(address to, uint256 amount) returns (bool)",
-        params: [TREASURY_ADDRESS, priceInSmallestUnit]
-      });
+      // Loop through basket array items and write modifications to Supabase database states
+      for (const item of cart) {
+        if (item.product.category === 'consumable') {
+          // Update stackable count fields inside inventory_items
+          const { data } = await supabase
+            .from('inventory_items')
+            .select(item.product.id)
+            .eq('wallet_address', lowerAddress)
+            .single();
 
-      const { transactionHash } = await sendTransaction({ transaction: transferTx, account });
-      
-      setTxStatus('Confirming payment on ledger...');
-      await waitForReceipt({ transactionHash, client, chain: celoMainnet });
-      setTxStatus('Securing asset to your inventory...');
+          const currentCount = data ? Number(data[item.product.id]) || 0 : 0;
+          
+          await supabase
+            .from('inventory_items')
+            .upsert({
+              wallet_address: lowerAddress,
+              [item.product.id]: currentCount + item.quantity
+            }, { onConflict: 'wallet_address' });
 
-      if (isPowerUp) {
-        const response = await fetch('/api/shop/buy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ walletAddress: account.address, itemType: itemId, quantity: quantity, transactionHash })
-        });
-        if (!response.ok) throw new Error("Database delivery failed");
-        
-        setPowerUpBalances(prev => ({ ...prev, [itemId]: (prev[itemId] || 0) + quantity }));
-        setQuantities(prev => ({ ...prev, [itemId]: 1 }));
-      } else {
-        // Unlocks Skins OR Arenas permanently
-        const { error } = await supabase.from('inventory').insert([{ wallet_address: account.address.toLowerCase(), item_id: itemId }]);
-        if (error) throw error;
-        setOwnedItems(prev => [...prev, itemId]);
+        } else {
+          // Unique cosmetics/maps get tracked inside the generalized inventory log lines
+          await supabase
+            .from('inventory')
+            .insert([{
+              wallet_address: lowerAddress,
+              item_id: item.product.id
+            }]);
+        }
       }
 
-      alert("Purchase Successful! Asset secured in your inventory.");
-    } catch (error: any) {
-      alert("Transaction failed or was rejected.");
+      alert("Assets Securely Minted to Inventory Profile!");
+      setCart([]); // Reset basket state
+    } catch (err: any) {
+      console.error("Store execution pipeline failure:", err);
+      alert("Checkout failure: " + err.message);
     } finally {
-      setProcessingId(null);
-      setTxStatus('');
+      setIsProcessingCheckout(false);
     }
   };
 
   return (
-    <div className="w-full flex flex-col gap-10 animate-fade-in pb-16">
+    <div className="w-full flex flex-col gap-6 animate-fade-in pb-16">
       
-      {/* SHOP HEADER */}
-      <div className="bg-[#111722] p-6 lg:p-8 rounded-3xl border border-white/5 relative overflow-hidden flex flex-col sm:flex-row sm:justify-between sm:items-center gap-6">
-        <div className="z-10 relative">
-          <h2 className="text-3xl lg:text-4xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-blue-500 tracking-wide mb-1">
-            COSMETIC ARMORY
+      {/* HEADER SECTION */}
+      <div className="bg-[#111722] p-6 rounded-3xl border border-white/5 flex flex-col sm:flex-row justify-between sm:items-center gap-4 relative overflow-hidden">
+        <div>
+          <h2 className="text-3xl font-black italic text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-500 tracking-wide mb-1">
+            TRADING CONCOURSE
           </h2>
-          <p className="text-gray-400 font-semibold text-sm">Secure exclusive assets and power-ups using stablecoins.</p>
+          <p className="text-gray-400 font-semibold text-sm">Deploy multi-stablecoin liquidity to load premium assets.</p>
         </div>
-        <div className="z-10 bg-[#0B0F17] border border-white/10 p-2 rounded-xl flex items-center gap-2 max-w-fit">
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-2">Pay With:</span>
-          <select value={preferredCurrency} onChange={(e) => setPreferredCurrency(e.target.value as CurrencySymbol)} className="bg-transparent text-white font-black outline-none cursor-pointer p-1">
-            <option value="USDC">USDC</option>
-            <option value="USDT">USDT</option>
-            <option value="USDm">USDm</option>
-          </select>
-        </div>
-      </div>
 
-      {txStatus && <div className="w-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 p-4 rounded-xl text-center font-bold animate-pulse">{txStatus}</div>}
-
-      {/* SECTION 1: POWER-UPS */}
-      <div>
-        <h4 className="text-sm font-black text-gray-500 tracking-widest uppercase mb-4 pl-2">Combat Power-Ups (Stackable)</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {POWER_UPS.map((power) => (
-             /* ... Keep existing Power-up rendering logic ... */
-             <div key={power.id} className="bg-[#0B0F17] p-5 rounded-2xl border border-white/5 hover:border-white/20 transition-all flex flex-col justify-between group relative overflow-hidden">
-             <div>
-               <div className="flex justify-between items-start mb-4">
-                 <div className={`w-16 h-16 rounded-xl bg-gradient-to-tr ${power.color} flex items-center justify-center text-3xl shadow-inner relative z-10`}>{power.icon}</div>
-                 <div className="flex flex-col items-end">
-                   <span className="text-[10px] font-black uppercase tracking-wider text-green-400 bg-green-500/10 px-2 py-0.5 rounded">Consumable</span>
-                   {account?.address && <span className="text-xs text-gray-400 font-bold mt-1">Owned: {powerUpBalances[power.id] || 0}</span>}
-                 </div>
-               </div>
-               <h3 className="text-lg font-bold text-white mb-1 z-10 relative">{power.name}</h3>
-               <p className="text-xs text-gray-400 z-10 relative mb-4 h-8 line-clamp-2">{power.desc}</p>
-               
-               <div className="bg-[#111722] border border-white/5 rounded-xl p-2 flex items-center justify-between mb-2">
-                 <span className="text-xs font-bold text-gray-400 pl-1">Quantity:</span>
-                 <div className="flex items-center gap-3">
-                   <button onClick={() => updateQuantity(power.id, -1)} disabled={(quantities[power.id] || 1) <= 1 || !!processingId} className="w-7 h-7 rounded-lg bg-gray-800 text-white font-bold transition-all disabled:opacity-30">-</button>
-                   <span className="text-sm font-black text-white min-w-[16px] text-center">{quantities[power.id] || 1}</span>
-                   <button onClick={() => updateQuantity(power.id, 1)} disabled={!!processingId} className="w-7 h-7 rounded-lg bg-gray-800 text-white font-bold transition-all disabled:opacity-30">+</button>
-                 </div>
-               </div>
-             </div>
-             
-             <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-white/5 z-10 relative">
-               <div className="flex justify-between items-center text-xs text-gray-400 font-medium">
-                 <span>Unit: {power.price.toFixed(2)}</span>
-                 <span className="font-bold text-gray-300">Total: {(power.price * (quantities[power.id] || 1)).toFixed(2)} {preferredCurrency}</span>
-               </div>
-               <button onClick={() => handlePurchase(power.id, power.price, true)} disabled={!!processingId} className="w-full text-xs bg-gradient-to-r from-emerald-600 to-green-600 text-white py-2.5 rounded-xl font-black uppercase transition-all disabled:opacity-50">
-                 {processingId === power.id ? 'Processing...' : `Buy ${quantities[power.id] || 1}`}
-               </button>
-             </div>
-           </div>
+        {/* Categories Tab Toggles */}
+        <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 h-fit select-none">
+          {(['all', 'consumable', 'skin', 'arena'] as const).map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${activeCategory === cat ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              {cat}
+            </button>
           ))}
         </div>
       </div>
 
-      {/* SECTION 2: COSMETIC SKINS */}
-      <div>
-        <h4 className="text-sm font-black text-gray-500 tracking-widest uppercase mb-4 pl-2">Cosmetic Snake Skins</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {MASTER_SKINS.map((skin) => {
-            const isOwned = ownedItems.includes(skin.id);
-            return (
-              <div key={skin.id} className="bg-[#0B0F17] p-5 rounded-2xl border border-white/5 hover:border-white/20 transition-all flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start mb-4">
-                    <div className={`w-16 h-16 rounded-xl bg-gradient-to-tr ${skin.color} flex items-center justify-center text-3xl shadow-inner`}>{skin.icon}</div>
-                    <span className={`text-[10px] font-black uppercase tracking-wider ${skin.rarity === 'Legendary' ? 'text-yellow-500' : 'text-purple-400'}`}>{skin.rarity}</span>
-                  </div>
-                  <h3 className="text-lg font-bold text-white mb-1">{skin.name}</h3>
-                </div>
-                <div className="flex justify-between items-center mt-6 pt-4 border-t border-white/5">
-                  <span className="text-sm font-black text-gray-300">{skin.price.toFixed(2)} {preferredCurrency}</span>
-                  {isOwned ? (
-                    <span className="text-xs bg-gray-800 text-gray-400 px-4 py-2 rounded-lg font-bold">Acquired</span>
-                  ) : (
-                    <button onClick={() => handlePurchase(skin.id, skin.price, false)} disabled={!!processingId} className="text-xs bg-indigo-600 text-white px-5 py-2 rounded-lg font-bold transition-all disabled:opacity-50">
-                      {processingId === skin.id ? 'Processing...' : 'Purchase'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* SECTION 3: PREMIUM ARENAS */}
-      <div>
-        <h4 className="text-sm font-black text-gray-500 tracking-widest uppercase mb-4 pl-2">Premium Arenas</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {PREMIUM_ARENAS.map((arena) => {
-            const isOwned = ownedItems.includes(arena.id); // Re-uses the exact same array as skins!
-            return (
-              <div key={arena.id} className="bg-[#0B0F17] p-5 rounded-2xl border border-white/5 hover:border-white/20 transition-all flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start mb-4">
-                    <div className={`w-full h-24 rounded-xl bg-gradient-to-tr ${arena.color} flex items-center justify-center text-4xl shadow-inner mb-4`}>
-                      {arena.icon}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        
+        {/* PRODUCT CATALOG GRID DISPLAY */}
+        <div className={`${cart.length > 0 ? 'xl:col-span-8' : 'xl:col-span-12'} grid grid-cols-1 md:grid-cols-2 gap-4 transition-all duration-300`}>
+          {filteredCatalog.map((product) => (
+            <div key={product.id} className="bg-[#111722] p-5 rounded-2xl border border-white/5 flex flex-col justify-between group hover:border-white/10 transition-all h-52">
+              <div>
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl bg-black/40 w-12 h-12 flex items-center justify-center rounded-xl shadow-inner select-none">{product.icon}</span>
+                    <div>
+                      <h3 className="font-bold text-white text-sm group-hover:text-indigo-400 transition-colors">{product.name}</h3>
+                      <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${product.badgeColor} mt-1 inline-block`}>
+                        {product.rarity}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-white">{arena.name}</h3>
-                    <span className={`text-[10px] font-black uppercase tracking-wider ${arena.rarity === 'Legendary' ? 'text-yellow-500' : arena.rarity === 'Epic' ? 'text-purple-400' : 'text-blue-400'}`}>{arena.rarity}</span>
-                  </div>
                 </div>
-                <div className="flex justify-between items-center mt-6 pt-4 border-t border-white/5">
-                  <span className="text-sm font-black text-gray-300">{arena.price.toFixed(2)} {preferredCurrency}</span>
-                  {isOwned ? (
-                    <span className="text-xs bg-gray-800 text-gray-400 px-4 py-2 rounded-lg font-bold">Acquired</span>
-                  ) : (
-                    <button onClick={() => handlePurchase(arena.id, arena.price, false)} disabled={!!processingId} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded-lg font-bold transition-all disabled:opacity-50">
-                      {processingId === arena.id ? 'Processing...' : 'Purchase'}
-                    </button>
-                  )}
+                <p className="text-xs text-gray-400 line-clamp-2 mt-2 leading-relaxed">{product.description}</p>
+              </div>
+
+              <div className="flex justify-between items-center border-t border-white/5 pt-3 mt-2">
+                <div>
+                  <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Asset Valuation</p>
+                  <p className="text-lg font-black text-white font-mono">${product.price.toFixed(2)}</p>
+                </div>
+                <button
+                  onClick={() => handleOpenConfigModal(product)}
+                  className="px-4 py-2 bg-gray-800 hover:bg-indigo-600 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95"
+                >
+                  Purchase
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* PREMIUM MULTI-ITEM BASKET DRAWER */}
+        {cart.length > 0 && (
+          <div className="xl:col-span-4 bg-[#111722] p-5 rounded-2xl border border-indigo-500/20 animate-fade-in flex flex-col gap-4 sticky top-6">
+            <div className="flex justify-between items-center border-b border-white/5 pb-3">
+              <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                🛍️ Asset Basket <span className="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full font-mono">{totalCartUnits}</span>
+              </h4>
+              <button onClick={handleClearCart} className="text-[10px] font-bold text-gray-500 hover:text-red-400 uppercase tracking-wider transition-colors">Clear</button>
+            </div>
+
+            <div className="max-h-60 overflow-y-auto space-y-2.5 pr-1">
+              {cart.map((item) => (
+                <div key={item.product.id} className="bg-black/30 border border-white/5 rounded-xl p-2.5 flex items-center justify-between text-xs animate-fade-in">
+                  <div className="flex items-center gap-2.5 truncate">
+                    <span className="text-xl bg-black/40 w-8 h-8 rounded-lg flex items-center justify-center select-none">{item.product.icon}</span>
+                    <div className="truncate">
+                      <p className="font-bold text-white truncate">{item.product.name}</p>
+                      <p className="text-[10px] text-gray-500 font-mono">Qty: {item.quantity} × ${item.product.price.toFixed(2)}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => handleRemoveFromCart(item.product.id)} className="text-gray-600 hover:text-red-400 font-bold px-1 text-base transition-colors ml-2 select-none">✕</button>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-white/5 pt-4 flex flex-col gap-3">
+              <div className="flex justify-between items-end font-bold">
+                <span className="text-xs text-gray-400 uppercase tracking-wider">Aggregate Value</span>
+                <span className="text-2xl font-black text-emerald-400 font-mono">${totalCartCost.toFixed(2)}</span>
+              </div>
+              <button
+                onClick={handleExecuteCartCheckout}
+                disabled={isProcessingCheckout}
+                className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:from-gray-800 disabled:text-gray-500 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(99,102,241,0.2)] active:scale-98"
+              >
+                {isProcessingCheckout ? 'MINTING LEDGER SECURES...' : 'AUTHORIZE BUNDLE CHECKOUT'}
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* POP-UP ON-DEMAND PURCHASE CONFIGURATION MODAL */}
+      {selectedProduct && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-[200] animate-fade-in">
+          <div className="bg-[#111722] border border-white/10 w-full max-w-sm rounded-2xl p-5 shadow-2xl relative">
+            <button onClick={() => setSelectedProduct(null)} className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors text-base select-none">✕</button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-3xl bg-black/40 w-12 h-12 flex items-center justify-center rounded-xl shadow-inner select-none">{selectedProduct.icon}</span>
+              <div>
+                <h3 className="font-black text-base text-white">{selectedProduct.name}</h3>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">${selectedProduct.price.toFixed(2)} unit allocation</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-400 mb-6 leading-relaxed border-t border-white/5 pt-3">{selectedProduct.description}</p>
+
+            {/* Config controls show contextually depending on consumable types */}
+            {selectedProduct.category === 'consumable' ? (
+              <div className="mb-6 flex flex-col gap-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Configure Quantity</label>
+                <div className="flex items-center bg-black/40 rounded-xl border border-white/5 p-1 w-full max-w-[140px] justify-between h-10 select-none">
+                  <button onClick={() => setModalQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 flex items-center justify-center font-bold text-gray-400 hover:text-white hover:bg-white/5 rounded-lg">-</button>
+                  <span className="font-black text-sm text-white font-mono">{modalQuantity}</span>
+                  <button onClick={() => setModalQuantity(q => q + 1)} className="w-8 h-8 flex items-center justify-center font-bold text-gray-400 hover:text-white hover:bg-white/5 rounded-lg">+</button>
                 </div>
               </div>
-            );
-          })}
+            ) : (
+              <div className="mb-6 p-3 bg-indigo-500/5 rounded-xl border border-indigo-500/10 text-[10px] font-bold text-indigo-400 uppercase tracking-wide flex items-center gap-2">
+                ℹ️ Unique Asset type limited to maximum 1 unit per account allocation.
+              </div>
+            )}
+
+            <div className="border-t border-white/5 pt-4 flex justify-between items-center">
+              <div>
+                <p className="text-[9px] text-gray-500 font-black uppercase tracking-wider">Subtotal Value</p>
+                <p className="text-xl font-black text-white font-mono">${(selectedProduct.price * modalQuantity).toFixed(2)}</p>
+              </div>
+              <button
+                onClick={handleAddToCart}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md"
+              >
+                Add to Basket
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
     </div>
   );
