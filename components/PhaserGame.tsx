@@ -38,9 +38,7 @@ class AudioSynth {
     this.init();
     if (!this.ctx) return;
 
-    // Save the context to a local constant so TypeScript knows it is NOT null inside the loop
     const ctx = this.ctx; 
-
     const now = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.50]; 
     notes.forEach((freq, index) => {
@@ -109,17 +107,17 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
     let head: Phaser.Physics.Arcade.Sprite;
     let snakeBody: Phaser.GameObjects.Sprite[] = [];
-    let pathHistory: { x: number, y: number, rotation: number }[] = [];
+    let pathHistory: { x: number, y: number, moveAngle: number }[] = [];
     let food: Phaser.Physics.Arcade.Sprite;
 
     let scoreText: Phaser.GameObjects.Text;
     let score = 0;
     const speed = 220; 
 
-    // TIGHTER SPACING: 2 (makes the snake body completely seamless)
-    const spacing = 2; 
+    // PERFECT SPACING FOR TUBE EFFECT
+    const spacing = 3; 
+    const visualOffset = Math.PI / 2; // +90 Degrees to fix AI images facing UP
 
-    // Mobile Touch Target Coordinates
     let targetX = 1000;
     let targetY = 1000;
     let isTouching = false;
@@ -129,7 +127,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     const EPIC_LIFESPAN = 5000;
 
     function preload(this: Phaser.Scene) {
-      // PREMIUM 3D PNG ASSETS & ARENA
       this.load.image('arena_default', '/assets/arena_default.png');
       this.load.image('classic_head', '/assets/classic_head.png');
       this.load.image('classic_body', '/assets/classic_body.png');
@@ -141,7 +138,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       this.load.image('food_purple', '/assets/food_purple.png');
       this.load.image('food_red', '/assets/food_red.png');
 
-      // Fallback graphics to prevent crashes if images aren't uploaded yet
       this.load.on('loaderror', (fileObj: any) => {
         const g = this.add.graphics();
         if (fileObj.key.includes('arena')) { g.fillStyle(0x0B0F17); g.fillRect(0, 0, 512, 512); }
@@ -157,22 +153,23 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     function create(this: Phaser.Scene) {
       this.physics.world.setBounds(0, 0, 2000, 2000);
 
-      // DARK PREMIUM ARENA: Alpha reduced to 0.6 so it looks deep and cinematic
       const grid = this.add.tileSprite(1000, 1000, 2000, 2000, 'arena_default').setDepth(0);
-      grid.setAlpha(0.6);
+      grid.setAlpha(0.7);
 
       head = this.physics.add.sprite(1000, 1000, 'classic_head');
       head.setDepth(1000); 
-      head.setScale(0.8); // SLEEK HEAD: Scaled down for agility
+      head.setScale(0.5); // ENTERPRISE SCALE: Smaller head makes arena feel huge
       head.setCollideWorldBounds(true);
+      
+      // Initialize hidden movement angle
+      head.setData('moveAngle', 0);
 
-      // SLEEK BODY: Start with a slim body and tail
       for(let i=0; i<15; i++) {
         const isTail = i === 14; 
         const texture = isTail ? 'classic_tail' : 'classic_body';
         const bodyPart = this.add.sprite(1000, 1000, texture);
         bodyPart.setDepth(999 - i);
-        bodyPart.setScale(0.6); // SLEEK BODY: Much thinner segments
+        bodyPart.setScale(0.45); // ENTERPRISE SCALE: Slim body matches head perfectly
         snakeBody.push(bodyPart);
       }
 
@@ -180,7 +177,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       food.setDepth(5);
       spawnFood(this);
 
-      this.cameras.main.startFollow(head, true, 0.1, 0.1);
+      this.cameras.main.startFollow(head, true, 0.08, 0.08); // Smoother camera follow
       this.cameras.main.setBounds(0, 0, 2000, 2000);
 
       scoreText = this.add.text(20, 20, 'YIELD: 0 cUSD', { 
@@ -192,7 +189,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       this.physics.add.overlap(head, food, () => eatFood(this), undefined, this);
 
-      // Explicit Mobile Touch Listeners for MiniPay
       this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
         isTouching = true;
         targetX = pointer.worldX;
@@ -212,24 +208,30 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     }
 
     function update(this: Phaser.Scene, time: number, delta: number) {
-      // FIX: Guard against null physics bodies for TypeScript Strict Mode
       if (!head || !head.body) return;
 
-      // Calculate angle from snake head to the EXPLICIT target
+      // 1. Get the direction the player wants to go
       const targetAngle = Phaser.Math.Angle.Between(head.x, head.y, targetX, targetY);
+      
+      // 2. Fetch the current physics movement angle
+      let currentMoveAngle = head.getData('moveAngle');
 
-      // Only rotate if touching/moving mouse
+      // 3. Smoothly rotate the actual movement direction
       if (isTouching || this.input.activePointer.isDown) {
-         head.rotation = Phaser.Math.Angle.RotateTo(head.rotation, targetAngle, 0.15 * (delta / 16));
+         currentMoveAngle = Phaser.Math.Angle.RotateTo(currentMoveAngle, targetAngle, 0.12 * (delta / 16));
       }
+      head.setData('moveAngle', currentMoveAngle);
 
-      // Explicitly cast body to Phaser.Physics.Arcade.Body to satisfy TS compiler
-      this.physics.velocityFromRotation(head.rotation, speed, (head.body as Phaser.Physics.Arcade.Body).velocity);
+      // 4. Move the physical body based on the invisible move angle
+      this.physics.velocityFromRotation(currentMoveAngle, speed, (head.body as Phaser.Physics.Arcade.Body).velocity);
 
-      // Trailing Body Mechanics
-      pathHistory.unshift({ x: head.x, y: head.y, rotation: head.rotation });
+      // 5. THE FIX: Apply VISUAL offset so the image looks where it is moving!
+      head.rotation = currentMoveAngle + visualOffset;
 
-      if (pathHistory.length > snakeBody.length * spacing) {
+      // 6. Save the path history, logging the specific moveAngle for that exact moment
+      pathHistory.unshift({ x: head.x, y: head.y, moveAngle: currentMoveAngle });
+
+      if (pathHistory.length > snakeBody.length * spacing + 10) {
         pathHistory.pop();
       }
 
@@ -240,24 +242,20 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         if (targetPos) {
           snakeBody[i].setPosition(targetPos.x, targetPos.y);
 
-          // SLEEK DYNAMIC TAPERING TAIL
+          // THE FIX FOR THE BODY: Rotate EVERY segment so the scales align perfectly!
+          snakeBody[i].rotation = targetPos.moveAngle + visualOffset;
+
+          // Smooth Tapering Tail Effect
           const taperStart = snakeBody.length - 10;
           if (i > taperStart) {
-            // Scales smoothly down from 0.6 to ~0.2 at the very tip
-            const scaleDown = 0.6 - ((i - taperStart) * 0.04);
-            snakeBody[i].setScale(Math.max(scaleDown, 0.2)); 
+            const scaleDown = 0.45 - ((i - taperStart) * 0.03);
+            snakeBody[i].setScale(Math.max(scaleDown, 0.15)); 
           } else {
-            snakeBody[i].setScale(0.6); // Lock normal body to 0.6 scale
-          }
-
-          // ROTATE THE TAIL TO MATCH SLITHER DIRECTION
-          if (i === snakeBody.length - 1) {
-             snakeBody[i].rotation = targetPos.rotation;
+            snakeBody[i].setScale(0.45); 
           }
         }
       }
 
-      // Dynamic Food Timer
       if (isEpicFood) {
         foodTimer -= delta;
         if (foodTimer < 1500) {
@@ -283,30 +281,26 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         foodTimer = EPIC_LIFESPAN;
         food.alpha = 1;
         food.setScale(0);
-        scene.tweens.add({ targets: food, scale: 1.5, duration: 400, ease: 'Back.out' });
+        scene.tweens.add({ targets: food, scale: 1.2, duration: 400, ease: 'Back.out' });
         sfx.playEpicSpawn();
       } else {
         const standardFoods = ['food_normal', 'food_blue', 'food_purple', 'food_red'];
         food.setTexture(Phaser.Math.RND.pick(standardFoods));
         food.alpha = 1;
-        food.setScale(1.2);
+        food.setScale(1.0); // Slightly smaller food to match the new snake scale
       }
     }
 
     function eatFood(scene: Phaser.Scene) {
       sfx.playEat();
 
-      // Add segments, ensuring the final piece is ALWAYS the tail texture
       for(let i=0; i<5; i++) {
         const lastSegment = snakeBody[snakeBody.length - 1];
-
-        // Convert old tail into a normal body piece
         lastSegment.setTexture('classic_body');
 
-        // Push a new tail piece to the very end
         const newTail = scene.add.sprite(lastSegment.x, lastSegment.y, 'classic_tail');
         newTail.setDepth(lastSegment.depth - 1);
-        newTail.setScale(0.2); // Start small for the tail tip
+        newTail.setScale(0.15); 
         snakeBody.push(newTail);
       }
 
@@ -333,16 +327,15 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         pathHistory = [];
 
         head.setPosition(1000, 1000);
-        head.setRotation(0);
+        head.setData('moveAngle', 0);
         head.setVelocity(0, 0);
 
-        // Reset snake body and tail
         for(let i=0; i<15; i++) {
           const isTail = i === 14; 
           const texture = isTail ? 'classic_tail' : 'classic_body';
           const bodyPart = scene.add.sprite(1000, 1000, texture);
           bodyPart.setDepth(999 - i);
-          bodyPart.setScale(0.6); // Reset to sleek scale
+          bodyPart.setScale(0.45); 
           snakeBody.push(bodyPart);
         }
 
@@ -365,7 +358,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     <div className="w-full h-full flex flex-col items-center justify-center bg-[#06090E] relative">
       <div ref={gameRef} className="rounded-xl overflow-hidden shadow-[0_0_40px_rgba(34,197,94,0.15)] w-full max-w-[800px]" />
 
-      {/* Premium Mobile Touch Instruction Overlay */}
       <div className="absolute top-4 right-4 pointer-events-none opacity-50 bg-black/50 px-3 py-1 rounded-full text-xs font-bold text-white/70 tracking-widest border border-white/10">
         DRAG TO STEER
       </div>
