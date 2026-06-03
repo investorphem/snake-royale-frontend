@@ -112,7 +112,8 @@ export default function Clans() {
       if (clanError) throw clanError;
 
       if (newClan) {
-        -- 2. UPDATED: Establish founding association directly inside clan_members table as LEADER
+        // FIXED: Replaced legacy SQL comment trigger "--" with JavaScript single line slash identifier
+        // 2. UPDATED: Establish founding association directly inside clan_members table as LEADER
         const { error: memberError } = await supabase
           .from('clan_members')
           .insert([{

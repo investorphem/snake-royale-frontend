@@ -1,8 +1,20 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-backend-js'; // Or your backend client config
-import { VerifyLoginPayloadParams, verifyLoginPayload } from "thirdweb/auth";
+import { createClient } from '@supabase/supabase-js'; // Fixed: Swapped to the real unified package name
+import { createAuth } from "thirdweb/auth"; // Fixed: Migrated standalone verify hook to v5 createAuth object
+import { createThirdwebClient } from "thirdweb";
 
-// Initialize Supabase using the SECURE Service Role Key
+// 1. Initialize Thirdweb Client for secure backend transaction authentication
+const client = createThirdwebClient({ 
+  clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID || "3yd744Q5LPJ3BC1ndknBd0JLotNiKe4Dy-x2aqYEXKfNkzBLo3kXQL-5u0P3aMOX17uEdwClXg_FRKf_RSe09w" 
+}); 
+
+// 2. Initialize Thirdweb Auth Interface Instance
+const auth = createAuth({
+  client,
+  domain: process.env.NEXT_PUBLIC_AUTH_DOMAIN || "localhost:3000" // Fallback fallback parameters matching browser domains
+});
+
+// 3. Initialize Supabase using the SECURE Service Role Key
 // This key is completely hidden from the browser because this code runs only on the server
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,8 +29,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
     }
 
-    // 1. Verify the signature via Thirdweb to prove wallet ownership
-    const verifiedProfile = await verifyLoginPayload({
+    // 4. Verify the signature via Thirdweb v5 Auth pipeline to prove wallet ownership
+    const verifiedProfile = await auth.verifyPayload({
       payload,
       signature,
     });
@@ -27,9 +39,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid signature or authorization expired" }, { status: 401 });
     }
 
-    const walletAddress = verifiedProfile.payload.address;
+    // Capture uniform lowercased addresses to guarantee cross-table data integrity matches
+    const walletAddress = verifiedProfile.payload.address.toLowerCase();
 
-    // 2. Perform the database operation securely using God Mode (Service Role)
+    // 5. Perform the database operation securely using God Mode (Service Role)
     const { data, error } = await supabaseAdmin
       .from('players')
       .upsert({ 
@@ -40,7 +53,8 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
-      if (error.message.includes('unique_username')) {
+      // Catch both string definitions and standard Postgres 23505 unique code collisions safely
+      if (error.message.includes('unique_username') || error.code === '23505') {
         return NextResponse.json({ error: "Username is already taken" }, { status: 409 });
       }
       return NextResponse.json({ error: error.message }, { status: 500 });
