@@ -20,7 +20,7 @@ const client = createThirdwebClient({
 }); 
 
 const mainnetChain = defineChain(42220); // Celo Mainnet for real stablecoins
-const TREASURY_WALLET_ADDRESS = "0xF30b45003dCDe160B94962bB58FA8C2E9Ab70372"; 
+const TREASURY_WALLET_ADDRESS = "0xec24bAfBc989a9bE5f6F0eAD8848753B5E4aE0B6"; 
 
 // ==========================================
 // UI AUDIO SYNTHESIZER (Tactile Shop Sounds)
@@ -176,7 +176,7 @@ export default function Shop({ selectedCoin }: { selectedCoin: { symbol: string,
       });
 
       // 2. Convert Price to Wei Safely (Handles 18 decimals for USDm vs 6 decimals for USDC/USDT)
-      const multiplier = 10n ** BigInt(selectedCoin.decimals - 2); 
+      const multiplier = BigInt(10) ** BigInt(selectedCoin.decimals - 2);
       const totalInWei = BigInt(Math.round(totalCartCost * 100)) * multiplier;
 
       // 3. Prepare the smart contract call
