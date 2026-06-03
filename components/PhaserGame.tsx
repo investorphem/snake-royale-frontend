@@ -85,10 +85,10 @@ export default function PhaserGame({ walletAddress, arenaTheme = 'classic', onGa
     let isMagnetActive = false;
     
     let isEpicFood = false;
-    let isToxicFood = false; // For Toxic Arena
+    let isToxicFood = false; 
     let foodTimer = 0;
     
-    let arenaTimer = 0; // For Magma Eruptions
+    let arenaTimer = 0; 
 
     function preload(this: Phaser.Scene) {
       this.load.image('classic_head', '/assets/classic_head.svg');
@@ -153,7 +153,12 @@ export default function PhaserGame({ walletAddress, arenaTheme = 'classic', onGa
           isShieldActive = true; head.setTint(0x60a5fa);
           this.time.delayedCall(5000, () => { isShieldActive = false; head.clearTint(); });
         } else if (type === 'magnet') {
-          isMagnetActive = true; this.time.delayedCall(10000, () => { isMagnetActive = false; if(food.body) food.setVelocity(0, 0); });
+          isMagnetActive = true; 
+          this.time.delayedCall(10000, () => { 
+            isMagnetActive = false; 
+            const foodBody = food.body as Phaser.Physics.Arcade.Body;
+            if (foodBody) foodBody.setVelocity(0, 0); 
+          });
         }
       };
       window.addEventListener('ACTIVATE_POWERUP_MODIFIER', handlePowerUpSignal);
@@ -193,12 +198,17 @@ export default function PhaserGame({ walletAddress, arenaTheme = 'classic', onGa
         });
       }
 
-      // 2. Base Movement with Drifts
+      // =====================================
+      // 2. FIXED: STRICT PRIMITIVE NULL SAFETY TYPE-GUARDS
+      // =====================================
       head.rotation = Phaser.Math.Angle.RotateTo(head.rotation, targetAngle, 0.1 * (delta / 16));
-      this.physics.velocityFromRotation(head.rotation, baseSpeed * speedMultiplier, head.body.velocity);
       
-      if (driftX !== 0) head.body.velocity.x += driftX;
-      if (driftY !== 0) head.body.velocity.y += driftY;
+      const headBody = head.body as Phaser.Physics.Arcade.Body;
+      if (headBody) {
+        this.physics.velocityFromRotation(head.rotation, baseSpeed * speedMultiplier, headBody.velocity);
+        if (driftX !== 0) headBody.velocity.x += driftX;
+        if (driftY !== 0) headBody.velocity.y += driftY;
+      }
 
       // 3. Trailing Mechanics
       pathHistory.unshift({ x: head.x, y: head.y, rotation: head.rotation });
@@ -209,11 +219,12 @@ export default function PhaserGame({ walletAddress, arenaTheme = 'classic', onGa
       }
 
       // 4. Magnet Power-Up
-      if (isMagnetActive && food && food.body && !isToxicFood) { 
+      const foodBody = food.body as Phaser.Physics.Arcade.Body;
+      if (isMagnetActive && food && foodBody && !isToxicFood) { 
         if (Phaser.Math.Distance.Between(head.x, head.y, food.x, food.y) < 250) {
           this.physics.moveToObject(food, head, 420);
         } else {
-          food.setVelocity(0, 0);
+          foodBody.setVelocity(0, 0);
         }
       }
 
@@ -248,10 +259,12 @@ export default function PhaserGame({ walletAddress, arenaTheme = 'classic', onGa
       const randomX = Phaser.Math.Between(100, 1900);
       const randomY = Phaser.Math.Between(100, 1900);
       food.setPosition(randomX, randomY);
-      if (food.body) food.setVelocity(0, 0);
+      
+      const fBody = food.body as Phaser.Physics.Arcade.Body;
+      if (fBody) fBody.setVelocity(0, 0);
+      
       food.clearTint();
       isToxicFood = false;
-      
       isEpicFood = Math.random() < 0.15; 
       
       if (arenaTheme === 'arena_toxic' && !isEpicFood && Math.random() < 0.25) {
@@ -305,11 +318,8 @@ export default function PhaserGame({ walletAddress, arenaTheme = 'classic', onGa
       sfx.playDie();
       
       if (score > 0) {
-        // Trigger React Callback
         onGameOverRef.current?.(score);
         
-        // --- TOURNAMENT LEADERBOARD SYNC ---
-        // Instantly checks the DB and updates the high score if the player is in the tournament!
         if (walletAddress) {
           (async () => {
             try {
@@ -332,7 +342,6 @@ export default function PhaserGame({ walletAddress, arenaTheme = 'classic', onGa
             }
           })();
         }
-        // -----------------------------------
       }
 
       scene.cameras.main.shake(400, 0.03);
@@ -361,7 +370,7 @@ export default function PhaserGame({ walletAddress, arenaTheme = 'classic', onGa
       phaserInstance.current = null;
       if (gameRef.current) gameRef.current.innerHTML = '';
     };
-  }, [walletAddress, arenaTheme]); // Re-mount if theme changes
+  }, [walletAddress, arenaTheme]);
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-center bg-[#06090E] relative group">
