@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 interface FeatureGridProps {
-  onSelectAction?: (actionType: string) => void;
+  onSelectAction?: (actionType: 'arena' | 'shop' | 'tournament' | 'syndicate') => void;
 }
 
 export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
@@ -14,6 +14,7 @@ export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
   const [topPlayers, setTopPlayers] = useState<any[]>([]);
   const [topClan, setTopClan] = useState<any>(null);
   const [activeWar, setActiveWar] = useState<any>(null);
+  const [tournamentPool, setTournamentPool] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -47,6 +48,14 @@ export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
           .single();
         if (wars) setActiveWar(wars);
 
+        // 4. NEW: Fetch Tournament entry count to display Live Grand Prix Stakes
+        const { count } = await supabase
+          .from('tournament_entries')
+          .select('*', { count: 'exact', head: true })
+          .eq('has_paid', true);
+        
+        if (count) setTournamentPool(count * 5); // 5 cUSD per entry fee
+
       } catch (error) {
         console.error("Failed to load feature grid telemetry:", error);
       } finally {
@@ -65,9 +74,11 @@ export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
       icon: '🏆',
       borderColor: 'hover:border-green-500/50',
       textColor: 'group-hover:text-green-400',
+      actionLabel: 'Enter Tournament Lobby',
+      targetTab: 'tournament' as const,
       content: (
         <div className="space-y-3">
-          <p className="text-xs text-gray-400 font-semibold mb-2">TOP RANKED PROTOCOL AGENTS</p>
+          <p className="text-xs text-gray-400 font-semibold mb-2">TOP GLOBAL RANKING AGENTS</p>
           {isLoading ? (
             <div className="h-20 bg-gray-800 rounded animate-pulse"></div>
           ) : topPlayers.length === 0 ? (
@@ -90,59 +101,66 @@ export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
     },
     {
       id: 'yield',
-      title: 'YIELD DISTRIBUTION',
-      subtitle: 'Active Liquidity Pools',
-      description: 'Secure verified multi-player reward pools.',
+      title: 'YIELD JACKPOTS',
+      subtitle: 'Tournament & Liquidity Pools',
+      description: 'Secure verified multi-player escrow pools.',
       icon: '💰',
       borderColor: 'hover:border-yellow-500/50',
       textColor: 'group-hover:text-yellow-400',
+      actionLabel: 'Launch Match Arena',
+      targetTab: 'arena' as const,
       content: (
         <div className="space-y-3">
-          <p className="text-xs text-gray-400 font-semibold mb-2">LIVE ARENA VOLUMES</p>
-          <div className="bg-black/40 p-4 rounded-lg border border-white/5 text-center">
-            {isLoading ? (
-               <div className="h-10 bg-gray-800 rounded animate-pulse"></div>
-            ) : activeWar ? (
-              <>
-                <span className="text-[10px] text-gray-500 block font-bold uppercase tracking-widest">{activeWar.title} Pool</span>
-                <span className="text-2xl font-black text-yellow-500 mt-1 block">{activeWar.prize_pool}</span>
-              </>
-            ) : (
-              <>
-                <span className="text-[10px] text-gray-500 block font-bold">ACTIVE LIQUIDITY</span>
-                <span className="text-lg font-black text-white">Awaiting Deployment</span>
-              </>
-            )}
+          <p className="text-xs text-gray-400 font-semibold mb-2">LIVE ESCROW RESERVES</p>
+          <div className="bg-black/40 p-4 rounded-xl border border-white/5 flex flex-col gap-3">
+            <div>
+              <span className="text-[10px] text-gray-500 block font-bold uppercase tracking-widest">Daily Grand Prix Pool</span>
+              <span className="text-2xl font-black text-emerald-400 mt-0.5 block">
+                {isLoading ? '...' : `${tournamentPool}.00 cUSD`}
+              </span>
+            </div>
+            
+            <div className="border-t border-white/5 pt-2">
+              <span className="text-[10px] text-gray-500 block font-bold uppercase tracking-widest">
+                {activeWar ? activeWar.title : 'Syndicate War'} Pool
+              </span>
+              <span className="text-xl font-black text-yellow-500 mt-0.5 block">
+                {activeWar ? activeWar.prize_pool : 'Awaiting Deployment'}
+              </span>
+            </div>
           </div>
         </div>
       )
     },
     {
       id: 'nft',
-      title: 'NFT SKINS',
-      subtitle: 'Cosmetic Armory',
-      description: 'Unlock rare cryptographic assets.',
+      title: 'COSMETIC ARMORY',
+      subtitle: 'Skins & Arenas Store',
+      description: 'Unlock unique skins, power-ups, and arenas.',
       icon: '👑',
       borderColor: 'hover:border-purple-500/50',
       textColor: 'group-hover:text-purple-400',
+      actionLabel: 'Open Trading Store',
+      targetTab: 'shop' as const,
       content: (
         <div className="space-y-2">
-          <p className="text-xs text-gray-400 font-semibold mb-2">AVAILABLE ASSET UPGRADES</p>
+          <p className="text-xs text-gray-400 font-semibold mb-2">AVAILABLE STABLECOIN MINTS</p>
           <div className="grid grid-cols-1 gap-2">
             {[
-              { name: 'Golden King', price: '25.00 USDC', icon: '👑', color: 'border-yellow-500/30' },
-              { name: 'Cyber Snake', price: '15.00 USDC', icon: '🤖', color: 'border-purple-500/30' },
-              { name: 'Magma Flow', price: '12.50 USDC', icon: '🌋', color: 'border-red-500/30' }
+              { name: 'Golden King Skin', price: '25.00', icon: '👑', color: 'border-yellow-500/20 text-yellow-400' },
+              { name: 'Premium Map Arenas', price: '30.00+', icon: '🌌', color: 'border-blue-500/20 text-blue-400' },
+              { name: 'Combat Power-Ups', price: '2.00+', icon: '⚡', color: 'border-green-500/20 text-green-400' }
             ].map((skin, idx) => (
-              <div key={idx} className={`flex justify-between items-center bg-black/40 p-3 rounded-lg border text-sm ${skin.color}`}>
+              <div key={idx} className={`flex justify-between items-center bg-black/40 p-2.5 rounded-lg border text-xs ${skin.color}`}>
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">{skin.icon}</span>
+                  <span className="text-base">{skin.icon}</span>
                   <span className="font-bold text-gray-300">{skin.name}</span>
                 </div>
-                <span className="font-black text-purple-400">{skin.price}</span>
+                <span className="font-black text-white">{skin.price} Stables</span>
               </div>
             ))}
           </div>
+          <p className="text-[10px] text-gray-500 text-center font-semibold mt-1 uppercase tracking-wider">Supports USDC / USDT / USDm</p>
         </div>
       )
     },
@@ -150,13 +168,15 @@ export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
       id: 'syndicate',
       title: 'SYNDICATE CLANS',
       subtitle: 'Multi-agent Vaults',
-      description: 'Form groups to control the ecosystem.',
+      description: 'Form alliances to govern map territories.',
       icon: '🛡️',
       borderColor: 'hover:border-blue-500/50',
       textColor: 'group-hover:text-blue-400',
+      actionLabel: 'Manage Alliances',
+      targetTab: 'syndicate' as const,
       content: (
         <div className="space-y-3">
-          <p className="text-xs text-gray-400 font-semibold mb-2">APEX SYNDICATE</p>
+          <p className="text-xs text-gray-400 font-semibold mb-2">APEX SYNDICATE ON-CHAIN</p>
           <div className="p-4 bg-black/40 rounded-lg border border-white/5 text-center">
             {isLoading ? (
               <div className="h-10 bg-gray-800 rounded animate-pulse"></div>
@@ -176,6 +196,7 @@ export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
 
   return (
     <>
+      {/* GRID OVERVIEW */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
         {modules.map((mod) => (
           <div
@@ -212,6 +233,7 @@ export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
               >
                 ✕
               </button>
+              
               <div className="flex items-center gap-3 mb-4">
                 <span className="text-2xl">{selected.icon}</span>
                 <div>
@@ -219,9 +241,23 @@ export default function FeatureGrid({ onSelectAction }: FeatureGridProps) {
                   <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">{selected.subtitle}</p>
                 </div>
               </div>
+              
               <div className="mt-4 border-t border-white/5 pt-4">
                 {selected.content}
               </div>
+
+              {/* ACTION CALL TO ACTION DEEP LINK BUTTON */}
+              <button
+                onClick={() => {
+                  if (onSelectAction && selected.targetTab) {
+                    onSelectAction(selected.targetTab);
+                  }
+                  setActiveModal(null); // Dismiss modal window
+                }}
+                className="w-full mt-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(79,70,229,0.2)] active:scale-98"
+              >
+                {selected.actionLabel}
+              </button>
             </div>
           </div>
         );

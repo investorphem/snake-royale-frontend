@@ -5,19 +5,23 @@ import { ThirdwebProvider, ConnectButton, useActiveAccount, useConnect, useReadC
 import { createThirdwebClient, defineChain, prepareContractCall, sendTransaction, waitForReceipt, getContract, readContract } from "thirdweb";
 import { createWallet } from "thirdweb/wallets";
 import dynamic from 'next/dynamic';
+import { supabase } from "@/lib/supabaseClient";
+
+// Component Panel Imports
 import ProfileSidebar from "@/components/ProfileSidebar";
 import FeatureGrid from "@/components/FeatureGrid";
 import MobileNav from "@/components/MobileNav";
 import Shop from "@/components/Shop";
 import Inventory from "@/components/Inventory";
 import Clans from "@/components/Clans";
+import Tournament from "@/components/Tournament"; // Expanded: Connected the new tournament arena engine
 
 const client = createThirdwebClient({ 
   clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID || "3yd744Q5LPJ3BC1ndknBd0JLotNiKe4Dy-x2aqYEXKfNkzBLo3kXQL-5u0P3aMOX17uEdwClXg_FRKf_RSe09w" 
 }); 
 
-const gameNetwork = defineChain(11142220); // Testnet for development, swap to Mainnet later
-const mainnetChain = defineChain(42220);    
+const gameNetwork = defineChain(11142220); // Testnet for development wagers
+const mainnetChain = defineChain(42220);    // Celo Mainnet stablecoin asset validations   
 
 const STABLECOINS = [
   { symbol: "USDm", address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", decimals: 18, color: "text-green-400" },
@@ -45,7 +49,7 @@ function SnakeRoyaleApp() {
   const account = useActiveAccount();
   
   const [appState, setAppState] = useState<'menu' | 'create' | 'join' | 'playing'>('menu');
-  const [activeTab, setActiveTab] = useState<'home' | 'shop' | 'inventory' | 'clans' | 'profile'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'shop' | 'inventory' | 'clans' | 'profile' | 'tournament'>('home');
   const [txStatus, setTxStatus] = useState('');
   
   const [roomIdInput, setRoomIdInput] = useState('1');
@@ -53,6 +57,30 @@ function SnakeRoyaleApp() {
 
   const [activeRooms, setActiveRooms] = useState<any[]>([]);
   const [isFetchingRooms, setIsFetchingRooms] = useState(false);
+  
+  // NEW: Profile item selection state tracking to hydrate active arena boundaries inside Phaser loop
+  const [equippedArena, setEquippedArena] = useState<'classic' | 'arena_cyber' | 'arena_magma' | 'arena_toxic' | 'arena_void' | 'arena_temple'>('classic');
+
+  // Sync selected level elements from database profiles when navigation transitions occur
+  useEffect(() => {
+    const fetchEquippedArenaMapId = async () => {
+      if (!account?.address) return;
+      try {
+        const { data } = await supabase
+          .from('players')
+          .select('current_arena_id')
+          .eq('wallet_address', account.address.toLowerCase())
+          .single();
+        
+        if (data?.current_arena_id) {
+          setEquippedArena(data.current_arena_id as any);
+        }
+      } catch (err) {
+        console.error("Failed syncing active area parameters:", err);
+      }
+    };
+    fetchEquippedArenaMapId();
+  }, [account?.address, activeTab, appState]);
 
   const fetchLiveRooms = async () => {
     setIsFetchingRooms(true);
@@ -147,6 +175,7 @@ function SnakeRoyaleApp() {
   const handleGameOver = async (finalScore: number) => {
     if (!account?.address) return;
     try {
+      // 1. Sync User XP Profile points securely
       await fetch('/api/player/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -155,6 +184,39 @@ function SnakeRoyaleApp() {
           score: finalScore 
         })
       });
+
+      // 2. NEW: If user belongs to a syndicate clan, aggregate score directly to global clan power
+      const lowerAddress = account.address.toLowerCase();
+      const { data: membership } = await supabase
+        .from('clan_members')
+        .select('clan_id, war_points')
+        .eq('wallet_address', lowerAddress)
+        .single();
+
+      if (membership && membership.clan_id) {
+        // Increment user points contribution record
+        const newMemberPoints = (membership.war_points || 0) + finalScore;
+        await supabase
+          .from('clan_members')
+          .update({ war_points: newMemberPoints })
+          .eq('wallet_address', lowerAddress);
+
+        // Fetch and increment total power matrix on clans base table
+        const { data: clanData } = await supabase
+          .from('clans')
+          .select('total_power')
+          .eq('id', membership.clan_id)
+          .single();
+
+        if (clanData) {
+          await supabase
+            .from('clans')
+            .update({ total_power: (clanData.total_power || 0) + finalScore })
+            .eq('id', membership.clan_id);
+          console.log(`⚔️ Added ${finalScore} Power points to Alliance Syndicate ID: ${membership.clan_id}`);
+        }
+      }
+
       console.log(`Successfully synced ${finalScore} XP via secure backend.`);
     } catch (error) {
       console.error("Failed to sync match data:", error);
@@ -164,12 +226,13 @@ function SnakeRoyaleApp() {
   return (
     <main className="min-h-screen bg-[#06090E] text-white font-sans overflow-x-hidden selection:bg-[#84cc16] selection:text-black">
       
+      {/* GLOBAL NAVBAR COMPONENT LAYER */}
       <nav className="w-full flex justify-between items-center p-4 lg:px-8 border-b border-white/5 bg-[#0B0F17]/80 backdrop-blur-md fixed top-0 z-50">
         <div className="flex items-center gap-3">
-           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#84cc16] to-[#22c55e] flex items-center justify-center text-black font-black text-xl shadow-[0_0_15px_rgba(34,197,94,0.3)]">
+           <div onClick={() => setActiveTab('home')} className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#84cc16] to-[#22c55e] flex items-center justify-center text-black font-black text-xl shadow-[0_0_15px_rgba(34,197,94,0.3)] cursor-pointer">
              SR
            </div>
-           <span className="font-black italic text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400 hidden sm:block">
+           <span onClick={() => setActiveTab('home')} className="font-black italic text-xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400 hidden sm:block cursor-pointer">
              SNAKE <span className="text-[#84cc16]">ROYALE</span>
            </span>
         </div>
@@ -179,6 +242,7 @@ function SnakeRoyaleApp() {
         </div>
       </nav>
 
+      {/* DASHBOARD CONTAINER SCHEMAS */}
       <div className="pt-24 pb-24 px-4 lg:px-8 max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
         
         <div className="lg:col-span-8 flex flex-col gap-6">
@@ -186,6 +250,7 @@ function SnakeRoyaleApp() {
           {activeTab === 'shop' && <Shop />}
           {activeTab === 'inventory' && <Inventory />}
           {activeTab === 'clans' && <Clans />}
+          {activeTab === 'tournament' && <Tournament />}
           {activeTab === 'profile' && (
             <div className="block lg:hidden h-full animate-fade-in">
               <ProfileSidebar accountAddress={account?.address} />
@@ -196,10 +261,11 @@ function SnakeRoyaleApp() {
             <>
               {appState === 'playing' ? (
                 <div className="w-full aspect-video bg-black rounded-3xl overflow-hidden border border-[#22c55e]/30 shadow-[0_0_30px_rgba(34,197,94,0.15)] relative">
-                  <PhaserGame walletAddress={account?.address} onGameOver={handleGameOver} />
+                  {/* Dynamic arenaTheme integration binds player database equips safely */}
+                  <PhaserGame walletAddress={account?.address} arenaTheme={equippedArena} onGameOver={handleGameOver} />
                   <button 
                     onClick={() => setAppState('menu')}
-                    className="absolute top-4 left-4 bg-black/50 hover:bg-black/80 text-white px-4 py-2 rounded-full backdrop-blur-sm transition-all border border-white/10"
+                    className="absolute top-4 left-4 bg-black/50 hover:bg-black/80 text-white px-4 py-2 rounded-full backdrop-blur-sm transition-all border border-white/10 text-xs font-bold"
                   >
                     ← Disconnect Arena
                   </button>
@@ -217,7 +283,7 @@ function SnakeRoyaleApp() {
                       <div className="flex flex-col gap-4 w-full max-w-sm">
                         <button 
                           onClick={() => setAppState('playing')}
-                          className="w-full py-4 rounded-xl font-bold text-lg bg-gray-800 hover:bg-gray-700 text-white border border-white/10 transition-all"
+                          className="w-full py-4 rounded-xl font-bold text-sm bg-gray-800 hover:bg-gray-700 text-white border border-white/10 transition-all uppercase tracking-widest font-black"
                         >
                           🎮 FREE PRACTICE MODE
                         </button>
@@ -234,13 +300,13 @@ function SnakeRoyaleApp() {
                           <>
                             <button 
                               onClick={() => setAppState('create')}
-                              className="w-full py-4 rounded-xl font-bold text-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_rgba(79,70,229,0.2)] transition-all"
+                              className="w-full py-4 rounded-xl font-bold text-sm bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_rgba(79,70,229,0.2)] transition-all font-black uppercase tracking-widest"
                             >
                               ➕ HOST NEW WAGER
                             </button>
                             <button 
                               onClick={() => setAppState('join')}
-                              className="w-full py-4 rounded-xl font-bold text-lg bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(34,197,94,0.2)] transition-all"
+                              className="w-full py-4 rounded-xl font-bold text-sm bg-green-600 hover:bg-green-500 text-white shadow-[0_0_20px_rgba(34,197,94,0.2)] transition-all font-black uppercase tracking-widest"
                             >
                               ⚔️ ENTER ACTIVE WAGER
                             </button>
@@ -251,7 +317,7 @@ function SnakeRoyaleApp() {
                   )}
 
                   {appState === 'create' && (
-                    <div className="w-full max-w-md flex flex-col animate-fade-in">
+                    <div className="w-full max-w-md flex flex-col animate-fade-in text-sm font-semibold">
                       <div className="flex justify-between items-center mb-6">
                         <h3 className="text-xl font-black tracking-wide">Host Wager Configuration</h3>
                         <button onClick={() => setAppState('menu')} className="text-gray-500 hover:text-white">✕</button>
@@ -263,7 +329,7 @@ function SnakeRoyaleApp() {
                       <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Target Pool Entry Fee</label>
                       <input type="number" value={feeInput} onChange={e => setFeeInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-8 outline-none focus:border-indigo-500 font-mono" />
 
-                      <button onClick={handleCreateRoom} disabled={!!txStatus} className="w-full py-4 rounded-xl font-black text-lg bg-indigo-600 hover:bg-indigo-500 transition-all disabled:bg-gray-800 disabled:text-gray-500">
+                      <button onClick={handleCreateRoom} disabled={!!txStatus} className="w-full py-4 rounded-xl font-black text-sm bg-indigo-600 hover:bg-indigo-500 transition-all disabled:bg-gray-800 disabled:text-gray-500 uppercase tracking-wider">
                         {txStatus || 'PUBLISH ESCROW APPARATUS'}
                       </button>
                     </div>
@@ -277,17 +343,17 @@ function SnakeRoyaleApp() {
                       </div>
 
                       {txStatus && (
-                        <div className="w-full bg-green-500/10 border border-green-500/30 text-green-400 p-4 rounded-xl mb-4 text-center font-bold animate-pulse">
+                        <div className="w-full bg-green-500/10 border border-green-500/30 text-green-400 p-4 rounded-xl mb-4 text-center font-bold animate-pulse text-xs">
                           {txStatus}
                         </div>
                       )}
 
                       {isFetchingRooms ? (
-                        <div className="text-center py-10 text-gray-500 font-semibold animate-pulse">
+                        <div className="text-center py-10 text-gray-500 font-bold animate-pulse text-xs uppercase tracking-widest">
                           Scanning network for active rooms...
                         </div>
                       ) : activeRooms.length === 0 ? (
-                        <div className="text-center py-10 bg-[#0B0F17] rounded-xl border border-white/5">
+                        <div className="text-center py-10 bg-[#0B0F17] rounded-xl border border-white/5 w-full">
                           <p className="text-gray-400 font-bold mb-2">No Active Rooms Found</p>
                           <p className="text-xs text-gray-600 mb-4">Be the first to host a match.</p>
                           <button onClick={() => setAppState('create')} className="text-indigo-400 text-sm font-bold hover:underline">
@@ -295,7 +361,7 @@ function SnakeRoyaleApp() {
                           </button>
                         </div>
                       ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-3 w-full">
                           <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select an Arena to Join</p>
                           {activeRooms.map((room) => (
                             <div key={room.roomId} className="bg-[#0B0F17] border border-white/10 rounded-xl p-4 flex justify-between items-center group hover:border-green-500/50 transition-all">
@@ -304,11 +370,11 @@ function SnakeRoyaleApp() {
                                 <p className="text-xs text-gray-500">Awaiting Challengers</p>
                               </div>
                               <div className="flex items-center gap-4">
-                                <span className="font-black text-green-400">{room.entryFee} Stake</span>
+                                <span className="font-black text-green-400 text-sm">{room.entryFee} Stake</span>
                                 <button 
                                   onClick={() => handleJoinRoom(room.roomId.toString(), room.entryFee)}
                                   disabled={!!txStatus}
-                                  className="bg-green-600 hover:bg-green-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-all disabled:bg-gray-800 disabled:text-gray-500"
+                                  className="bg-green-600 hover:bg-green-500 text-white font-black px-4 py-2 rounded-lg text-xs tracking-wide uppercase transition-all disabled:bg-gray-800 disabled:text-gray-500"
                                 >
                                   ENTER
                                 </button>
@@ -322,33 +388,51 @@ function SnakeRoyaleApp() {
 
                 </div>
               )}
-              {appState !== 'playing' && <FeatureGrid />}
+              
+              {/* UPDATED: Injected FeatureGrid tab switcher hook deep linking targets */}
+              {appState !== 'playing' && (
+                <FeatureGrid 
+                  onSelectAction={(target) => {
+                    if (target === 'shop') setActiveTab('shop');
+                    if (target === 'syndicate') setActiveTab('clans');
+                    if (target === 'tournament') setActiveTab('tournament');
+                    if (target === 'arena') {
+                      setActiveTab('home');
+                      setAppState('join');
+                    }
+                  }} 
+                />
+              )}
             </>
           )}
         </div>
 
+        {/* RIGHT COLUMN: PERMANENT DESKTOP PROFILE BAR */}
         <div className="hidden lg:flex lg:col-span-4 flex-col gap-6">
           <ProfileSidebar accountAddress={account?.address} />
         </div>
 
       </div>
+      
+      {/* STICKY FOOTER TOUCH BAR NAV */}
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </main>
   );
 }
 
-// --- DROPDOWN NAVIGATION & HYDRATION FIX ---
+// ========================================================
+// STABLECOINS SYSTEM HEADER CONTROLLER & HYDRATION BOUNDARY
+// ========================================================
 function MiniPayNav() {
   const account = useActiveAccount();
   const { connect } = useConnect();
   const [mounted, setMounted] = useState(false);
   const [isMobileWallet, setIsMobileWallet] = useState(true);
   
-  // New state for handling the stablecoin dropdown
   const [selectedCoin, setSelectedCoin] = useState(STABLECOINS[0]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  // 1. Hydration Fix
+  // 1. Hydration Initialization checks
   useEffect(() => {
     setMounted(true);
     const checkWallet = setTimeout(() => {
@@ -361,7 +445,7 @@ function MiniPayNav() {
     return () => clearTimeout(checkWallet);
   }, [connect]);
 
-  // 2. SECURE ONBOARDING SYNC
+  // 2. Secure player registration lifecycle onboard hooks
   useEffect(() => {
     const onboardPlayer = async () => {
       if (!account?.address) return;
@@ -378,11 +462,11 @@ function MiniPayNav() {
     if (account?.address) onboardPlayer();
   }, [account?.address]);
 
-  if (!mounted) return <div className="text-xs text-gray-500 font-bold animate-pulse">Loading Interface...</div>;
+  if (!mounted) return <div className="text-xs text-gray-500 font-bold animate-pulse uppercase tracking-wider">Loading Interface...</div>;
 
   if (!account) {
     return isMobileWallet ? (
-      <div className="text-xs text-gray-500 font-bold animate-pulse">Detecting Wallet...</div>
+      <div className="text-xs text-gray-500 font-bold animate-pulse uppercase tracking-wider">Detecting Wallet...</div>
     ) : (
       <ConnectButton client={client} chain={mainnetChain} theme={"dark"} />
     );
@@ -393,7 +477,7 @@ function MiniPayNav() {
       {/* Dropdown Toggle */}
       <div 
         onClick={() => setDropdownOpen(!dropdownOpen)}
-        className="cursor-pointer flex items-center gap-1 hover:ring-1 hover:ring-white/10 rounded-lg transition-all"
+        className="cursor-pointer flex items-center gap-1 hover:ring-1 hover:ring-white/10 rounded-lg transition-all select-none"
       >
         <TokenBadge token={selectedCoin} accountAddress={account.address} />
         <div className="bg-[#0B0F17] border border-white/5 px-2 py-1.5 rounded-lg flex items-center justify-center shadow-[0_0_10px_rgba(255,255,255,0.02)]">
@@ -401,12 +485,12 @@ function MiniPayNav() {
         </div>
       </div>
 
-      {/* Dropdown Menu */}
+      {/* Dropdown Menu options selection list container */}
       {dropdownOpen && (
         <div className="absolute right-0 top-full mt-2 w-full min-w-[140px] bg-[#0B0F17] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 flex flex-col">
           {STABLECOINS.map((token) => (
             <button
-              key={token.symbol}
+              key={token.address}
               onClick={() => {
                 setSelectedCoin(token);
                 setDropdownOpen(false);
@@ -436,7 +520,7 @@ function TokenBadge({ token, accountAddress }: { token: any, accountAddress: str
 
   return (
     <div className="bg-[#0B0F17] border border-white/5 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-[0_0_10px_rgba(255,255,255,0.02)]">
-       <span className="text-white font-black text-sm">{formattedBalance}</span>
+       <span className="text-white font-black text-sm font-mono">{formattedBalance}</span>
        <span className={`${token.color} text-[10px] font-black uppercase tracking-widest`}>{token.symbol}</span>
     </div>
   );

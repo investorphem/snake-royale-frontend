@@ -56,15 +56,19 @@ export default function Clans() {
 
       if (wars) setActiveWars(wars);
 
-      // 3. Check User Membership Profile Connection
-      const { data: player } = await supabase
-        .from('players')
-        .select('clan_id, clans(*)')
+      // 3. UPDATED: Check User Membership Profile Connection via clan_members
+      const { data: memberData } = await supabase
+        .from('clan_members')
+        .select('*, clans(*)')
         .eq('wallet_address', lowerAddress)
         .single();
 
-      if (player?.clans) {
-        setUserClan(player.clans);
+      if (memberData?.clans) {
+        setUserClan({
+          ...memberData.clans,
+          userRole: memberData.role,
+          myPoints: memberData.war_points
+        });
       } else {
         setUserClan(null);
       }
@@ -78,6 +82,10 @@ export default function Clans() {
 
   useEffect(() => {
     fetchData();
+    
+    // Setup background interval pooling to capture active territory point updates
+    const pollInterval = setInterval(fetchData, 15000);
+    return () => clearInterval(pollInterval);
   }, [account?.address, activeView]);
 
   // Handle Dynamic Database Row Insertion for New Clan Alliances
@@ -88,13 +96,15 @@ export default function Clans() {
     try {
       const lowerAddress = account.address.toLowerCase();
 
+      // 1. Insert New Clan Entry Line
       const { data: newClan, error: clanError } = await supabase
         .from('clans')
         .insert([{ 
           name: clanName, 
           tag: clanTag.toUpperCase(), 
-          leader_address: lowerAddress,
-          total_power: 100 
+          created_by: lowerAddress,
+          total_power: 100,
+          treasury: 0
         }])
         .select()
         .single();
@@ -102,13 +112,22 @@ export default function Clans() {
       if (clanError) throw clanError;
 
       if (newClan) {
-        await supabase
-          .from('players')
-          .update({ clan_id: newClan.id })
-          .eq('wallet_address', lowerAddress);
+        -- 2. UPDATED: Establish founding association directly inside clan_members table as LEADER
+        const { error: memberError } = await supabase
+          .from('clan_members')
+          .insert([{
+            wallet_address: lowerAddress,
+            clan_id: newClan.id,
+            role: 'LEADER',
+            war_points: 0
+          }]);
+
+        if (memberError) throw memberError;
           
-        setUserClan(newClan);
+        setUserClan({ ...newClan, userRole: 'LEADER', myPoints: 0 });
         setActiveView('hub');
+        setClanName('');
+        setClanTag('');
       }
     } catch (error: any) {
       console.error(error);
@@ -122,24 +141,38 @@ export default function Clans() {
     if (!account?.address) return;
     try {
       const lowerAddress = account.address.toLowerCase();
-      await supabase
-        .from('players')
-        .update({ clan_id: clanId })
-        .eq('wallet_address', lowerAddress);
+      
+      // UPDATED: Insert entry mapping cleanly down to the clan_members junction table
+      const { error } = await supabase
+        .from('clan_members')
+        .insert([{
+          wallet_address: lowerAddress,
+          clan_id: clanId,
+          role: 'AGENT',
+          war_points: 0
+        }]);
+
+      if (error) throw error;
       
       fetchData();
     } catch (error) {
       console.error("Failed to map membership index to target entity:", error);
+      alert("Could not process syndicate membership alignment.");
     }
   };
 
   const handleLeaveClan = async () => {
     if (!account?.address) return;
+    if (!confirm("Are you sure you want to disconnect your alliance configuration path?")) return;
+    
     try {
-      await supabase
-        .from('players')
-        .update({ clan_id: null })
+      // UPDATED: Clear association row from the junction database ledger directly
+      const { error } = await supabase
+        .from('clan_members')
+        .delete()
         .eq('wallet_address', account.address.toLowerCase());
+
+      if (error) throw error;
       
       setUserClan(null);
     } catch (error) {
@@ -173,11 +206,11 @@ export default function Clans() {
           <div className="bg-gradient-to-r from-blue-500/10 to-transparent p-[1px] rounded-3xl">
             <div className="bg-[#111722] p-6 rounded-3xl border border-blue-500/20 flex flex-col items-center text-center transition-all">
               
-              {isLoading ? (
+              {isLoading && topClans.length === 0 ? (
                 <div className="h-40 flex items-center justify-center text-blue-500 animate-pulse font-bold tracking-widest text-xs uppercase">Synchronizing Network State...</div>
               ) : activeView === 'create' ? (
-                <div className="w-full max-w-sm animate-fade-in">
-                  <h3 className="text-xl font-black text-white mb-4">Establish New Syndicate</h3>
+                <div className="w-full max-w-sm animate-fade-in text-left">
+                  <h3 className="text-xl font-black text-white mb-4 text-center">Establish New Syndicate</h3>
                   <input 
                     type="text" 
                     placeholder="Syndicate Name" 
@@ -218,15 +251,18 @@ export default function Clans() {
                   </div>
                 </div>
               ) : (
-                <div className="animate-fade-in">
+                <div className="animate-fade-in w-full">
                   <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-4xl mb-4 shadow-[0_0_20px_rgba(37,99,235,0.3)] mx-auto">🐍</div>
                   <h3 className="text-2xl font-black text-white mb-1 tracking-wide">{userClan.name}</h3>
                   <div className="flex justify-center gap-2 mb-6">
                     <span className="bg-blue-500/20 text-blue-400 text-[10px] font-black px-3 py-1 relative rounded-md uppercase tracking-widest">
                       [{userClan.tag}]
                     </span>
+                    <span className="bg-indigo-500/20 text-indigo-400 text-[10px] font-black px-3 py-1 relative rounded-md uppercase tracking-widest">
+                      Role: {userClan.userRole}
+                    </span>
                     <span className="bg-purple-500/20 text-purple-400 text-[10px] font-black px-3 py-1 relative rounded-md uppercase tracking-widest">
-                      Power Rank: {userClan.total_power}
+                      War Contribution: {userClan.myPoints || 0} PTS
                     </span>
                   </div>
                   <button onClick={handleLeaveClan} className="text-xs text-gray-500 hover:text-red-400 underline transition-colors font-bold">
@@ -241,22 +277,26 @@ export default function Clans() {
           <div className="bg-[#111722] p-6 rounded-3xl border border-white/5 hidden sm:block">
             <h3 className="text-gray-400 font-bold uppercase tracking-widest text-xs mb-6">Dynamic Arena War Deployments</h3>
             <div className="space-y-4">
-              {activeWars.map((war) => (
-                <div key={war.id} className="bg-[#0B0F17] border border-white/5 rounded-2xl p-4 flex justify-between items-center group hover:border-red-500/30 transition-all cursor-pointer">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`w-2 h-2 rounded-full ${war.status === 'LIVE' ? 'bg-red-500 animate-pulse' : 'bg-yellow-500'}`}></span>
-                      <span className={`text-[10px] font-black tracking-widest uppercase ${war.status === 'LIVE' ? 'text-red-500' : 'text-yellow-500'}`}>{war.status}</span>
+              {activeWars.length === 0 ? (
+                <p className="text-sm text-gray-500 py-2">No active strategic conflicts scheduled on the tracker.</p>
+              ) : (
+                activeWars.map((war) => (
+                  <div key={war.id} className="bg-[#0B0F17] border border-white/5 rounded-2xl p-4 flex justify-between items-center group hover:border-red-500/30 transition-all cursor-pointer">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`w-2 h-2 rounded-full ${war.status === 'LIVE' ? 'bg-red-500 animate-pulse' : 'bg-yellow-500'}`}></span>
+                        <span className={`text-[10px] font-black tracking-widest uppercase ${war.status === 'LIVE' ? 'text-red-500' : 'text-yellow-500'}`}>{war.status}</span>
+                      </div>
+                      <h4 className="font-bold text-white text-lg">{war.title}</h4>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Ends In: {formatRemainingTime(war.ends_at)}</p>
                     </div>
-                    <h4 className="font-bold text-white text-lg">{war.title}</h4>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">Ends In: {formatRemainingTime(war.ends_at)}</p>
+                    <div className="text-right">
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Allocation Pool</p>
+                      <p className="text-xl font-black text-yellow-500">{war.prize_pool} cUSD</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Allocation Pool</p>
-                    <p className="text-xl font-black text-yellow-500">{war.prize_pool}</p>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -267,7 +307,7 @@ export default function Clans() {
           <div className="bg-[#111722] p-6 rounded-3xl border border-white/5 h-full">
             <h3 className="text-gray-400 font-bold uppercase tracking-widest text-xs mb-6">Global Framework Leaderboard</h3>
 
-            {isLoading ? (
+            {isLoading && topClans.length === 0 ? (
                <div className="space-y-3 animate-pulse">
                  <div className="h-16 bg-gray-800 rounded-xl w-full"></div>
                  <div className="h-16 bg-gray-800 rounded-xl w-full"></div>
@@ -286,9 +326,10 @@ export default function Clans() {
                     }`}>
                       #{idx + 1}
                     </div>
-                    <div className="flex-grow">
-                      <h4 className="font-bold text-white flex items-center gap-2">
-                        {clan.name} <span className="text-[9px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded font-mono">[{clan.tag}]</span>
+                    <div className="flex-grow min-w-0">
+                      <h4 className="font-bold text-white flex items-center gap-2 truncate">
+                        <span className="truncate">{clan.name}</span>
+                        <span className="text-[9px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded font-mono flex-shrink-0">[{clan.tag}]</span>
                       </h4>
                       <p className="text-xs text-gray-500 font-semibold">Accumulated Power: {clan.total_power}</p>
                     </div>
@@ -296,7 +337,7 @@ export default function Clans() {
                     {!userClan && (
                       <button 
                         onClick={() => handleJoinClan(clan.id)}
-                        className="text-[10px] bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider transition-colors"
+                        className="text-[10px] bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider transition-colors flex-shrink-0"
                       >
                         Join
                       </button>
