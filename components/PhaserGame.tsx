@@ -97,18 +97,18 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     let head: Phaser.Physics.Arcade.Sprite;
     let snakeBody: Phaser.GameObjects.Sprite[] = [];
     let pathHistory: { x: number, y: number, moveAngle: number }[] = [];
-    
+
     let food: Phaser.Physics.Arcade.Sprite;
     let scoreText: Phaser.GameObjects.Text;
     let score = 0;
-    
+
     // =====================================
     // ENTERPRISE SLITHER.IO PHYSICS TUNING
     // =====================================
     const speed = 260; 
     const RECORD_DISTANCE = 4; // Records a point every 4 pixels exactly
     const SPACING_INDEX = 5;   // Segments sit 20 pixels apart (4px * 5)
-    
+
     const HEAD_SCALE = 0.15;   
     const BODY_SCALE = 0.15;   
     const visualOffset = Math.PI / 2; // +90 Degrees offset
@@ -118,6 +118,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     let isTouching = false;
     let isEpicFood = false;
     let foodTimer = 0;
+    let pendingGrowth = 0;
+    let isEating = false;
 
     function preload(this: Phaser.Scene) {
       this.load.image('arena_default', '/assets/arena_default.png');
@@ -142,7 +144,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       head.setScale(HEAD_SCALE); 
       head.setCollideWorldBounds(true);
       head.setData('moveAngle', -Math.PI / 2); // Face Up to start
-      
+
       // PRE-FILL HISTORY: Makes the snake spawn fully stretched out!
       for (let i = 0; i <= 25 * SPACING_INDEX + 10; i++) {
         pathHistory.push({ 
@@ -163,6 +165,13 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       food = this.physics.add.sprite(0, 0, 'food_normal');
       food.setDepth(5);
+
+      const gfx = this.make.graphics({ x: 0, y: 0 });
+      gfx.fillStyle(0xffffff);
+      gfx.fillCircle(4, 4, 4);
+      gfx.generateTexture('foodSpark', 8, 8);
+      gfx.destroy();
+
       spawnFood(this);
 
       this.cameras.main.startFollow(head, true, 0.08, 0.08); 
@@ -173,7 +182,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         fontSize: '28px', fontFamily: 'sans-serif', color: '#ffffff', fontStyle: 'bold' 
       }).setScrollFactor(0).setDepth(2000);
 
-      this.physics.add.overlap(head, food, () => eatFood(this), undefined, this);
+      // Food attraction/eating handled in update()
 
       this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => { isTouching = true; targetX = pointer.worldX; targetY = pointer.worldY; });
       this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => { if (isTouching || pointer.isDown) { targetX = pointer.worldX; targetY = pointer.worldY; } });
@@ -194,6 +203,29 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       head.rotation = currentMoveAngle + visualOffset;
 
+      const foodDistance = Phaser.Math.Distance.Between(
+        head.x,
+        head.y,
+        food.x,
+        food.y
+      );
+
+      if (foodDistance < 140 && !isEating) {
+        const pullAngle = Phaser.Math.Angle.Between(
+          food.x,
+          food.y,
+          head.x,
+          head.y
+        );
+
+        food.x += Math.cos(pullAngle) * 8;
+        food.y += Math.sin(pullAngle) * 8;
+      }
+
+      if (foodDistance < 28 && !isEating) {
+        eatFood(this);
+      }
+
       const lastPos = pathHistory[0];
       const distToLast = Phaser.Math.Distance.Between(head.x, head.y, lastPos.x, lastPos.y);
 
@@ -210,7 +242,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
         if (targetPos) {
           snakeBody[i].setPosition(targetPos.x, targetPos.y);
-          
+
           const frontSegment = i === 0 ? head : snakeBody[i - 1];
           const angleToFront = Phaser.Math.Angle.Between(snakeBody[i].x, snakeBody[i].y, frontSegment.x, frontSegment.y);
           snakeBody[i].rotation = angleToFront + visualOffset;
@@ -230,6 +262,30 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         foodTimer -= delta;
         if (foodTimer < 1500) food.alpha = Math.floor(time / 100) % 2 === 0 ? 0.3 : 1;
         if (foodTimer <= 0) spawnFood(this); 
+      }
+
+      if (pendingGrowth > 0 && time % 60 < 16) {
+        const lastSegment = snakeBody[snakeBody.length - 1];
+
+        lastSegment.setTexture('classic_body');
+
+        const newTail = this.add.sprite(
+          lastSegment.x,
+          lastSegment.y,
+          'classic_tail'
+        );
+
+        newTail.setDepth(lastSegment.depth - 1);
+        newTail.setScale(BODY_SCALE);
+
+        snakeBody.push(newTail);
+
+        for (let j = 0; j < SPACING_INDEX; j++) {
+          const lastHistory = pathHistory[pathHistory.length - 1];
+          if (lastHistory) pathHistory.push({ ...lastHistory });
+        }
+
+        pendingGrowth--;
       }
 
       if (head.x <= 10 || head.x >= 2990 || head.y <= 10 || head.y >= 2990) triggerDeath(this);
@@ -257,29 +313,48 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     }
 
     function eatFood(scene: Phaser.Scene) {
+      if (isEating) return;
+
+      isEating = true;
       sfx.playEat();
-      
-      // FIX: Grow 6 solid segments per food
-      for(let i=0; i<6; i++) { 
-        const lastSegment = snakeBody[snakeBody.length - 1];
-        lastSegment.setTexture('classic_body');
-        
-        const newTail = scene.add.sprite(lastSegment.x, lastSegment.y, 'classic_tail');
-        newTail.setDepth(lastSegment.depth - 1);
-        newTail.setScale(BODY_SCALE); 
-        snakeBody.push(newTail);
 
-        // FIX: Pad the pathHistory so the new segments don't get stuck!
-        for(let j=0; j<SPACING_INDEX; j++) {
-          const lastHistory = pathHistory[pathHistory.length - 1];
-          if (lastHistory) pathHistory.push({ ...lastHistory });
+      scene.tweens.add({
+        targets: head,
+        scale: HEAD_SCALE * 1.25,
+        duration: 80,
+        yoyo: true
+      });
+
+      scene.add.particles(food.x, food.y, 'foodSpark', {
+        speed: { min: 60, max: 220 },
+        lifespan: 350,
+        quantity: 12,
+        scale: { start: 0.4, end: 0 }
+      });
+
+      scene.tweens.add({
+        targets: food,
+        scale: 0,
+        alpha: 0,
+        duration: 120,
+        ease: 'Back.in',
+        onComplete: () => {
+          pendingGrowth += isEpicFood ? 12 : 6;
+
+          score += isEpicFood ? 20 : 5;
+          scoreText.setText(`YIELD: ${score} cUSD`);
+
+          scene.tweens.add({
+            targets: scoreText,
+            scale: 1.2,
+            duration: 100,
+            yoyo: true
+          });
+
+          spawnFood(scene);
+          isEating = false;
         }
-      }
-
-      score += isEpicFood ? 20 : 5;
-      scoreText.setText(`YIELD: ${score} cUSD`);
-      scene.tweens.add({ targets: scoreText, scale: 1.2, duration: 100, yoyo: true });
-      spawnFood(scene);
+      });
     }
 
     function triggerDeath(scene: Phaser.Scene) {
