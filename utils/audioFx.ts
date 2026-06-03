@@ -1,4 +1,3 @@
-// Custom Sound Synth for Snake Royale
 class AudioSynth {
   private ctx: AudioContext | null = null;
 
@@ -6,78 +5,103 @@ class AudioSynth {
     if (!this.ctx && typeof window !== 'undefined') {
       this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
   }
 
-  // Snappy bubble-pop style score collector sound
   playEat() {
     this.init();
-    if (!this.ctx) return;
+    const context = this.ctx; // Fixed: Local scoping block variable completely satisfies strict analysis rules
+    if (!context) return;
 
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    
-    osc.type = 'sine';
-    // Frequency pitch sweep from high to low quickly
-    osc.frequency.setValueAtTime(587.33, this.ctx.currentTime); // D5 Note
-    osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.08); // A5 Note
-    
-    gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
-    
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.1);
+    const o = context.createOscillator();
+    const g = context.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(587.33, context.currentTime);
+    o.frequency.exponentialRampToValueAtTime(880, context.currentTime + 0.08);
+    g.gain.setValueAtTime(0.3, context.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.1);
+    o.connect(g);
+    g.connect(context.destination);
+    o.start();
+    o.stop(context.currentTime + 0.1);
   }
 
-  // Vibrant cyber-chime sound for high-value targets
   playEpicSpawn() {
     this.init();
-    if (!this.ctx) return;
+    const context = this.ctx; // Fixed: Captures a immutable freeze state over the instance property
+    if (!context) return;
 
-    const now = this.ctx.currentTime;
-    // Layer multiple oscillators for a rich, crystalline chord structure
-    const notes = [523.25, 659.25, 783.99, 1046.50]; // C Major Chord
-    
-    notes.forEach((freq, index) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, now + (index * 0.04));
-      
-      gain.gain.setValueAtTime(0.15, now + (index * 0.04));
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-      
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      
-      osc.start(now + (index * 0.04));
-      osc.stop(now + 0.4);
+    const n = context.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+
+    notes.forEach((f, index) => {
+      const o = context.createOscillator(); // Safe inside the callback loop closure
+      const g = context.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(f, n + (index * 0.04));
+      g.gain.setValueAtTime(0.15, n + (index * 0.04));
+      g.gain.exponentialRampToValueAtTime(0.001, n + 0.4);
+      o.connect(g);
+      g.connect(context.destination);
+      o.start(n + (index * 0.04));
+      o.stop(n + 0.4);
     });
   }
 
-  // Low frequency thud/crash decay for game over events
   playDie() {
     this.init();
-    if (!this.ctx) return;
+    const context = this.ctx;
+    if (!context) return;
 
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(120, this.ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(40, this.ctx.currentTime + 0.3);
-    
-    gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.35);
-    
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.35);
+    const o = context.createOscillator();
+    const g = context.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(150, context.currentTime);
+    o.frequency.linearRampToValueAtTime(40, context.currentTime + 0.4);
+    g.gain.setValueAtTime(0.4, context.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.4);
+    o.connect(g);
+    g.connect(context.destination);
+    o.start();
+    o.stop(context.currentTime + 0.4);
+  }
+
+  playPowerUp() {
+    this.init();
+    const context = this.ctx;
+    if (!context) return;
+
+    const o = context.createOscillator();
+    const g = context.createGain();
+    o.type = 'square';
+    o.frequency.setValueAtTime(300, context.currentTime);
+    o.frequency.exponentialRampToValueAtTime(600, context.currentTime + 0.2);
+    g.gain.setValueAtTime(0.2, context.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.25);
+    o.connect(g);
+    g.connect(context.destination);
+    o.start();
+    o.stop(context.currentTime + 0.25);
+  }
+
+  playPoison() {
+    this.init();
+    const context = this.ctx;
+    if (!context) return;
+
+    const o = context.createOscillator();
+    const g = context.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(200, context.currentTime);
+    o.frequency.exponentialRampToValueAtTime(50, context.currentTime + 0.3);
+    g.gain.setValueAtTime(0.3, context.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.3);
+    o.connect(g);
+    g.connect(context.destination);
+    o.start();
+    o.stop(context.currentTime + 0.3);
   }
 }
 
