@@ -38,7 +38,7 @@ class AudioSynth {
     this.init();
     if (!this.ctx) return;
     
-    // FIX: Save the context to a local constant so TypeScript knows it is NOT null inside the loop
+    // Save the context to a local constant so TypeScript knows it is NOT null inside the loop
     const ctx = this.ctx; 
 
     const now = ctx.currentTime;
@@ -209,6 +209,9 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     }
 
     function update(this: Phaser.Scene, time: number, delta: number) {
+      // FIX: Guard against null physics bodies for TypeScript Strict Mode
+      if (!head || !head.body) return;
+
       // Calculate angle from snake head to the EXPLICIT target
       const targetAngle = Phaser.Math.Angle.Between(head.x, head.y, targetX, targetY);
 
@@ -217,7 +220,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
          head.rotation = Phaser.Math.Angle.RotateTo(head.rotation, targetAngle, 0.15 * (delta / 16));
       }
 
-      this.physics.velocityFromRotation(head.rotation, speed, head.body.velocity);
+      // FIX: Explicitly cast body to Phaser.Physics.Arcade.Body to satisfy TS compiler
+      this.physics.velocityFromRotation(head.rotation, speed, (head.body as Phaser.Physics.Arcade.Body).velocity);
 
       // Trailing Body Mechanics
       pathHistory.unshift({ x: head.x, y: head.y, rotation: head.rotation });
