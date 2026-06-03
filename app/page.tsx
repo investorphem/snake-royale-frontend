@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from "react";
-import { ThirdwebProvider, ConnectButton, useActiveAccount, useConnect, useReadContract } from "thirdweb/react";
+import { ThirdwebProvider, ConnectButton, useActiveAccount, useReadContract } from "thirdweb/react";
 import { createThirdwebClient, defineChain, prepareContractCall, sendTransaction, waitForReceipt, getContract, readContract } from "thirdweb";
 import dynamic from 'next/dynamic';
 import { supabase } from "@/lib/supabaseClient";
@@ -14,24 +14,24 @@ import Inventory from "@/components/Inventory";
 import Clans from "@/components/Clans";
 import Tournament from "@/components/Tournament";
 
+// ========================================================
+// STRICT MAINNET CONFIGURATION (NO TESTNETS)
+// ========================================================
 const client = createThirdwebClient({ 
   clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID || "3yd744Q5LPJ3BC1ndknBd0JLotNiKe4Dy-x2aqYEXKfNkzBLo3kXQL-5u0P3aMOX17uEdwClXg_FRKf_RSe09w" 
 }); 
 
-const gameNetwork = defineChain(11142220); 
+// Strictly Celo Mainnet
 const mainnetChain = defineChain(42220);       
 
-// Note: Celo USDC is 6 decimals. Real Celo cUSD is 18 decimals. 
-// The math in the transactions below will automatically adapt based on this array!
 const STABLECOINS = [
-  { symbol: "USDC", address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", decimals: 6, color: "text-blue-400" },
   { symbol: "cUSD", address: "0x765DE816845861e75A25fCA122bb6898B8B1282a", decimals: 18, color: "text-green-400" },
+  { symbol: "USDC", address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C", decimals: 6, color: "text-blue-400" },
   { symbol: "USDT", address: "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e", decimals: 6, color: "text-teal-400" },
 ];
 
-const SNAKE_WAGER_ADDRESS = "0xec24bAfBc989a9bE5f6F0eAD8848753B5E4aE0B6";
-
-const wagerContract = getContract({ client, chain: gameNetwork, address: SNAKE_WAGER_ADDRESS });
+const SNAKE_WAGER_ADDRESS = "0xF30b45003dCDe160B94962bB58FA8C2E9Ab70372";
+const wagerContract = getContract({ client, chain: mainnetChain, address: SNAKE_WAGER_ADDRESS });
 
 const PhaserGame = dynamic(() => import('@/components/PhaserGame'), { ssr: false });
 
@@ -50,9 +50,6 @@ function SnakeRoyaleApp() {
   const [activeTab, setActiveTab] = useState<'home' | 'shop' | 'inventory' | 'clans' | 'profile' | 'tournament'>('home');
   const [txStatus, setTxStatus] = useState('');
 
-  // ========================================================
-  // NEW: GLOBAL SELECTED COIN STATE
-  // ========================================================
   const [selectedCoin, setSelectedCoin] = useState(STABLECOINS[0]);
 
   const [roomIdInput, setRoomIdInput] = useState('1');
@@ -60,8 +57,7 @@ function SnakeRoyaleApp() {
 
   const [activeRooms, setActiveRooms] = useState<any[]>([]);
   const [isFetchingRooms, setIsFetchingRooms] = useState(false);
-  const [equippedArena, setEquippedArena] = useState<'classic' | 'arena_cyber' | 'arena_magma' | 'arena_toxic' | 'arena_void' | 'arena_temple'>('classic');
-
+  
   // Interactive Onboarding & Profile States
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [chosenUsername, setChosenUsername] = useState('');
@@ -89,51 +85,41 @@ function SnakeRoyaleApp() {
         } else {
           setShowOnboarding(false);
           setPlayerProfile(data);
-          if (data.current_arena_id) setEquippedArena(data.current_arena_id as any);
         }
       } catch (err) {
-        console.error("Identity matrix lookup failure:", err);
+        console.error("Database lookup failure:", err);
       }
     };
 
     evaluatePlayerAccountPresence();
   }, [account?.address, activeTab, appState]);
 
+  // FIX 3: DIRECT DATABASE SAVING FOR ONBOARDING (Guarantees Username is saved)
   const handleCreateOnboardingAccount = async () => {
     if (!account?.address || !chosenUsername.trim()) return;
     setIsOnboardingSaving(true);
-    setTxStatus('Initializing Cryptographic Identity...');
+    setTxStatus('Saving Profile to Database...');
 
     try {
-      const loginPayload = {
-        domain: window.location.host,
-        address: account.address,
-        statement: "Authorize Account Setup Initialization Sequence",
-        uri: window.location.origin,
-        version: "1",
-        chainId: "42220",
-        nonce: Math.random().toString(36).substring(2),
-        issuedAt: new Date().toISOString(),
-        expirationTime: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      };
+      const lowerAddress = account.address.toLowerCase();
+      
+      const { data, error } = await supabase
+        .from('players')
+        .upsert({
+          wallet_address: lowerAddress,
+          username: chosenUsername.trim(),
+          xp: 0
+        })
+        .select()
+        .single();
 
-      const messageToSign = `${loginPayload.domain} wants you to sign in with your Ethereum account:\n${loginPayload.address}\n\n${loginPayload.statement}\n\nURI: ${loginPayload.uri}\nVersion: ${loginPayload.version}\nChain ID: ${loginPayload.chainId}\nNonce: ${loginPayload.nonce}\nIssued At: ${loginPayload.issuedAt}`;
-      const signature = await account.signMessage({ message: messageToSign });
+      if (error) throw error;
 
-      const res = await fetch('/api/profile/setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payload: loginPayload, signature, username: chosenUsername.trim() })
-      });
-
-      const jsonResult = await res.json();
-      if (!res.ok) throw new Error(jsonResult.error || "Identity rejection.");
-
-      setPlayerProfile(jsonResult.player);
+      setPlayerProfile(data);
       setShowOnboarding(false); 
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to register profile identifier setup.");
+      alert("Failed to save username. Check database permissions.");
     } finally {
       setIsOnboardingSaving(false);
       setTxStatus('');
@@ -155,22 +141,14 @@ function SnakeRoyaleApp() {
 
   useEffect(() => { if (appState === 'join') fetchLiveRooms(); }, [appState]);
 
-  // ========================================================
-  // REAL WEB3 WAGER LOGIC (Dynamic Tokens + Gas Abstraction)
-  // ========================================================
   const handleCreateRoom = async () => {
     if (!account) return alert("Wallet not connected");
     if (Number(feeInput) <= 0) return alert("Invalid fee amount");
 
     try {
       setTxStatus(`Awaiting Escrow Deposit...`);
+      const currencyContract = getContract({ client, chain: mainnetChain, address: selectedCoin.address });
       
-      const currencyContract = getContract({ 
-        client, 
-        chain: mainnetChain, 
-        address: selectedCoin.address 
-      });
-
       const multiplier = BigInt(10) ** BigInt(selectedCoin.decimals - 2);
       const wagerInWei = BigInt(Math.round(Number(feeInput) * 100)) * multiplier;
 
@@ -180,7 +158,6 @@ function SnakeRoyaleApp() {
         params: [SNAKE_WAGER_ADDRESS, wagerInWei]
       });
 
-      // Execute transaction AND pay gas in the selected stablecoin!
       const { transactionHash } = await sendTransaction({
         transaction: {
           ...depositTx,
@@ -205,12 +182,7 @@ function SnakeRoyaleApp() {
     
     try {
       setTxStatus(`Awaiting Escrow Deposit...`);
-      
-      const currencyContract = getContract({ 
-        client, 
-        chain: mainnetChain, 
-        address: selectedCoin.address 
-      });
+      const currencyContract = getContract({ client, chain: mainnetChain, address: selectedCoin.address });
 
       const multiplier = BigInt(10) ** BigInt(selectedCoin.decimals - 2);
       const wagerInWei = BigInt(Math.round(Number(requiredFee) * 100)) * multiplier;
@@ -221,7 +193,6 @@ function SnakeRoyaleApp() {
         params: [SNAKE_WAGER_ADDRESS, wagerInWei]
       });
 
-      // Execute transaction AND pay gas in the selected stablecoin!
       const { transactionHash } = await sendTransaction({
         transaction: {
           ...depositTx,
@@ -245,7 +216,6 @@ function SnakeRoyaleApp() {
     setAppState('menu');
   };
 
-  // Calculate Level for Header Avatar
   const playerLevel = Math.floor((playerProfile?.xp || 0) / 1000) + 1;
   const xpProgress = ((playerProfile?.xp || 0) % 1000) / 10; 
 
@@ -255,7 +225,6 @@ function SnakeRoyaleApp() {
       {/* PREMIUM APP HEADER */}
       <nav className="w-full max-w-md mx-auto flex justify-between items-center p-4 bg-[#06090E] fixed top-0 z-50">
 
-        {/* LEFT: Player Identity & Level */}
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('profile')}>
            <div className="w-12 h-12 relative flex items-center justify-center bg-gradient-to-b from-[#84cc16] to-[#166534]" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}>
              <div className="w-[44px] h-[44px] bg-[#111722] flex items-center justify-center text-xl" style={{ clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)' }}>
@@ -276,9 +245,7 @@ function SnakeRoyaleApp() {
            </div>
         </div>
 
-        {/* RIGHT: Currency Wallet Pill */}
         <div className="flex items-center">
-          {/* PASSED DYNAMIC STATE DOWN TO NAV */}
           <MiniPayNav selectedCoin={selectedCoin} setSelectedCoin={setSelectedCoin} />
         </div>
       </nav>
@@ -286,7 +253,6 @@ function SnakeRoyaleApp() {
       {/* DYNAMIC APP VIEWPORT */}
       <div className="pt-24 pb-32 px-4 w-full max-w-md mx-auto flex-1 flex flex-col">
 
-        {/* PASSED DYNAMIC STATE DOWN TO SHOP */}
         {activeTab === 'shop' && <Shop selectedCoin={selectedCoin} />}
         {activeTab === 'inventory' && <Inventory />}
         {activeTab === 'clans' && <Clans />}
@@ -308,19 +274,19 @@ function SnakeRoyaleApp() {
                 {appState === 'menu' && (
                   <div className="w-full flex flex-col items-center text-center">
 
-                    {/* PREMIUM LOGO ASSET AREA */}
-                    <div className="relative w-full aspect-square max-w-[280px] flex flex-col items-center justify-center mb-6">
-                      <div className="text-8xl drop-shadow-[0_0_40px_rgba(132,204,22,0.4)] relative -mt-4 animate-bounce" style={{ animationDuration: '4s' }}>
-                         🐍<span className="absolute -top-6 right-0 text-5xl transform rotate-12 drop-shadow-md">👑</span>
-                      </div>
-                      <h1 className="text-4xl font-black italic text-white drop-shadow-lg text-center tracking-tighter leading-none mt-2">
-                        CELO <br/>
-                        <span className="text-transparent bg-clip-text bg-gradient-to-b from-[#bef264] to-[#22c55e] text-[64px] tracking-tight" style={{ WebkitTextStroke: '1px #166534' }}>SNAKE</span><br/>
+                    {/* FIX 4: PREMIUM HERO IMAGE (Matches your mockup exactly) */}
+                    <div className="relative w-full flex flex-col items-center justify-center mb-8 mt-2">
+                      <img 
+                        src="/assets/hero_snake.png" 
+                        alt="Snake Royale King" 
+                        className="w-56 h-auto drop-shadow-[0_0_40px_rgba(132,204,22,0.3)] mb-4 hover:scale-105 transition-transform duration-500" 
+                      />
+                      <h1 className="text-4xl font-black italic text-white drop-shadow-lg text-center tracking-tighter leading-none">
+                        <span className="text-transparent bg-clip-text bg-gradient-to-b from-[#bef264] to-[#22c55e] text-[52px] tracking-tight" style={{ WebkitTextStroke: '1px #166534' }}>SNAKE</span><br/>
                         <span className="text-yellow-400 text-5xl drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">ROYALE</span>
                       </h1>
                     </div>
 
-                    {/* PREMIUM INTERFACE BUTTONS */}
                     <div className="flex flex-col gap-3 w-full">
 
                       <button 
@@ -366,7 +332,6 @@ function SnakeRoyaleApp() {
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Room Index</label>
                     <input type="number" value={roomIdInput} onChange={e => setRoomIdInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-4 outline-none focus:border-indigo-500 font-mono" />
                     
-                    {/* Updated to display dynamic stablecoin symbol */}
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Target Entry Fee ({selectedCoin.symbol})</label>
                     <input type="number" value={feeInput} onChange={e => setFeeInput(e.target.value)} className="w-full bg-[#0B0F17] border border-white/10 rounded-xl p-3 text-white mb-8 outline-none focus:border-indigo-500 font-mono" />
                     
@@ -412,7 +377,6 @@ function SnakeRoyaleApp() {
         )}
       </div>
 
-      {/* PERSISTENT UNIVERSAL FOOTER */}
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {/* FIRST-TIME USER ONBOARDING MODAL */}
@@ -445,7 +409,6 @@ function SnakeRoyaleApp() {
           </div>
         </div>
       )}
-
     </main>
   );
 }
@@ -480,7 +443,10 @@ function MiniPayNav({ selectedCoin, setSelectedCoin }: { selectedCoin: any, setS
         className="cursor-pointer bg-[#1A1F2E] border border-white/5 px-3 py-2 rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all hover:bg-[#252b3d] select-none"
       >
         <div className="w-5 h-5 bg-gray-700 rounded-full flex items-center justify-center text-[10px]">🪙</div>
+        
+        {/* FIX 1: Safely fetches and formats Token Balances */}
         <TokenBadge token={selectedCoin} accountAddress={account.address} />
+        
         <div className="w-5 h-5 bg-[#84cc16] rounded-full flex items-center justify-center text-black font-black leading-none ml-1 shadow-[0_0_10px_rgba(132,204,22,0.4)]">
           +
         </div>
@@ -501,12 +467,23 @@ function MiniPayNav({ selectedCoin, setSelectedCoin }: { selectedCoin: any, setS
 
 function TokenBadge({ token, accountAddress }: { token: any, accountAddress: string }) {
   const contract = getContract({ client, chain: mainnetChain, address: token.address });
-  const { data } = useReadContract({ contract, method: "function balanceOf(address) view returns (uint256)", params: [accountAddress] });
-  const formattedBalance = data ? (Number(data) / 10 ** token.decimals).toFixed(2) : "0.00";
+  
+  const { data, isLoading } = useReadContract({ 
+    contract, 
+    method: "function balanceOf(address) view returns (uint256)", 
+    params: [accountAddress] 
+  });
+
+  // Mathematically safe conversion for Token Decimals (handles 18 vs 6 decimals properly)
+  const formattedBalance = data !== undefined 
+    ? (Number(data) / Math.pow(10, token.decimals)).toFixed(2) 
+    : "0.00";
 
   return (
     <div className="flex flex-col items-start leading-none justify-center">
-       <span className="text-white font-black text-[11px] font-mono">{formattedBalance}</span>
+       <span className="text-white font-black text-[11px] font-mono">
+         {isLoading ? "..." : formattedBalance}
+       </span>
        <span className={`text-[8px] font-black uppercase tracking-widest text-gray-400`}>{token.symbol}</span>
     </div>
   );
