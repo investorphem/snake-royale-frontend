@@ -96,24 +96,22 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
     let head: Phaser.Physics.Arcade.Sprite;
     let snakeBody: Phaser.GameObjects.Sprite[] = [];
-    let pathHistory: { x: number, y: number }[] = [];
+    let pathHistory: { x: number, y: number, moveAngle: number }[] = [];
+    
     let food: Phaser.Physics.Arcade.Sprite;
-
     let scoreText: Phaser.GameObjects.Text;
     let score = 0;
     
     // =====================================
-    // CORE PREMIUM PHYSICS SETTINGS
+    // ENTERPRISE SLITHER.IO PHYSICS TUNING
     // =====================================
-    const speed = 250; 
-    const spacing = 5; // Distance between segments
+    const speed = 260; 
+    const RECORD_DISTANCE = 4; // Records a point every 4 pixels exactly
+    const SPACING_INDEX = 5;   // Segments sit 20 pixels apart (4px * 5)
     
-    // Fixes 1024x1024 AI image resolutions!
-    const HEAD_SCALE = 0.08; 
-    const BODY_SCALE = 0.07; 
-    
-    // NOTE: If your snake faces DOWN instead of UP when moving, change this to -Math.PI / 2
-    const visualOffset = Math.PI / 2; 
+    const HEAD_SCALE = 0.15;   
+    const BODY_SCALE = 0.15;   
+    const visualOffset = Math.PI / 2; // +90 Degrees offset
 
     let targetX = 1000;
     let targetY = 1000;
@@ -131,34 +129,33 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       this.load.image('food_blue', '/assets/food_blue.png');
       this.load.image('food_purple', '/assets/food_purple.png');
       this.load.image('food_red', '/assets/food_red.png');
-
-      this.load.on('loaderror', (fileObj: any) => {
-        const g = this.add.graphics();
-        if (fileObj.key.includes('arena')) { g.fillStyle(0x0B0F17); g.fillRect(0, 0, 512, 512); }
-        else if (fileObj.key.includes('head')) { g.fillStyle(0x22c55e); g.fillCircle(15, 15, 15); }
-        else if (fileObj.key.includes('tail')) { g.fillStyle(0x16a34a); g.fillTriangle(0, 0, 30, 15, 0, 30); } 
-        else if (fileObj.key.includes('body')) { g.fillStyle(0x16a34a); g.fillCircle(15, 15, 15); }
-        else { g.fillStyle(0x4ade80); g.fillCircle(10, 10, 10); } 
-        g.generateTexture(fileObj.key, fileObj.key.includes('arena') ? 512 : 30, fileObj.key.includes('arena') ? 512 : 30);
-        g.destroy();
-      });
     }
 
     function create(this: Phaser.Scene) {
-      this.physics.world.setBounds(0, 0, 2000, 2000);
+      this.physics.world.setBounds(0, 0, 3000, 3000);
 
-      const grid = this.add.tileSprite(1000, 1000, 2000, 2000, 'arena_default').setDepth(0);
-      grid.setAlpha(0.6);
+      const grid = this.add.tileSprite(1500, 1500, 3000, 3000, 'arena_default').setDepth(0);
+      grid.setAlpha(0.5);
 
-      head = this.physics.add.sprite(1000, 1000, 'classic_head');
+      head = this.physics.add.sprite(1500, 1500, 'classic_head');
       head.setDepth(1000); 
       head.setScale(HEAD_SCALE); 
       head.setCollideWorldBounds(true);
-      head.setData('moveAngle', 0);
+      head.setData('moveAngle', -Math.PI / 2); // Face Up to start
+      
+      // PRE-FILL HISTORY: Makes the snake spawn fully stretched out!
+      for (let i = 0; i <= 25 * SPACING_INDEX + 10; i++) {
+        pathHistory.push({ 
+          x: 1500, 
+          y: 1500 + (i * RECORD_DISTANCE), 
+          moveAngle: -Math.PI / 2 
+        });
+      }
 
-      for(let i=0; i<15; i++) {
-        const texture = i === 14 ? 'classic_tail' : 'classic_body';
-        const bodyPart = this.add.sprite(1000, 1000, texture);
+      // Build initial 20-segment snake
+      for(let i=0; i<20; i++) {
+        const texture = i === 19 ? 'classic_tail' : 'classic_body';
+        const bodyPart = this.add.sprite(1500, 1500, texture);
         bodyPart.setDepth(999 - i);
         bodyPart.setScale(BODY_SCALE); 
         snakeBody.push(bodyPart);
@@ -169,10 +166,11 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       spawnFood(this);
 
       this.cameras.main.startFollow(head, true, 0.08, 0.08); 
-      this.cameras.main.setBounds(0, 0, 2000, 2000);
+      this.cameras.main.setBounds(0, 0, 3000, 3000);
+      this.cameras.main.setZoom(0.85);
 
       scoreText = this.add.text(20, 20, 'YIELD: 0 cUSD', { 
-        fontSize: '24px', fontFamily: 'sans-serif', color: '#ffffff', fontStyle: 'bold' 
+        fontSize: '28px', fontFamily: 'sans-serif', color: '#ffffff', fontStyle: 'bold' 
       }).setScrollFactor(0).setDepth(2000);
 
       this.physics.add.overlap(head, food, () => eatFood(this), undefined, this);
@@ -192,32 +190,36 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
          currentMoveAngle = Phaser.Math.Angle.RotateTo(currentMoveAngle, targetAngle, 0.15 * (delta / 16));
       }
       head.setData('moveAngle', currentMoveAngle);
-
       this.physics.velocityFromRotation(currentMoveAngle, speed, (head.body as Phaser.Physics.Arcade.Body).velocity);
 
-      // Rotate Head
       head.rotation = currentMoveAngle + visualOffset;
 
-      pathHistory.unshift({ x: head.x, y: head.y });
-      if (pathHistory.length > snakeBody.length * spacing + 10) pathHistory.pop();
+      const lastPos = pathHistory[0];
+      const distToLast = Phaser.Math.Distance.Between(head.x, head.y, lastPos.x, lastPos.y);
+
+      if (distToLast >= RECORD_DISTANCE) {
+        pathHistory.unshift({ x: head.x, y: head.y, moveAngle: currentMoveAngle });
+        if (pathHistory.length > snakeBody.length * SPACING_INDEX + 15) {
+          pathHistory.pop();
+        }
+      }
 
       for (let i = 0; i < snakeBody.length; i++) {
-        const historyIndex = (i + 1) * spacing;
+        const historyIndex = (i + 1) * SPACING_INDEX;
         const targetPos = pathHistory[historyIndex];
 
         if (targetPos) {
           snakeBody[i].setPosition(targetPos.x, targetPos.y);
-
-          // TRUE SLITHER.IO PHYSICS: Body segment points directly at the segment in front of it!
+          
           const frontSegment = i === 0 ? head : snakeBody[i - 1];
           const angleToFront = Phaser.Math.Angle.Between(snakeBody[i].x, snakeBody[i].y, frontSegment.x, frontSegment.y);
           snakeBody[i].rotation = angleToFront + visualOffset;
 
-          // Smooth Tapering Tail Effect
-          const taperStart = snakeBody.length - 8;
+          // Seamless Tail Tapering
+          const taperStart = snakeBody.length - 10;
           if (i > taperStart) {
-            const scaleDown = BODY_SCALE - ((i - taperStart) * 0.005);
-            snakeBody[i].setScale(Math.max(scaleDown, 0.02)); 
+            const scaleDown = BODY_SCALE - ((i - taperStart) * 0.012);
+            snakeBody[i].setScale(Math.max(scaleDown, 0.03)); 
           } else {
             snakeBody[i].setScale(BODY_SCALE); 
           }
@@ -230,12 +232,12 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         if (foodTimer <= 0) spawnFood(this); 
       }
 
-      if (head.x <= 5 || head.x >= 1995 || head.y <= 5 || head.y >= 1995) triggerDeath(this);
+      if (head.x <= 10 || head.x >= 2990 || head.y <= 10 || head.y >= 2990) triggerDeath(this);
     }
 
     function spawnFood(scene: Phaser.Scene) {
-      const randomX = Phaser.Math.Between(100, 1900);
-      const randomY = Phaser.Math.Between(100, 1900);
+      const randomX = Phaser.Math.Between(150, 2850);
+      const randomY = Phaser.Math.Between(150, 2850);
       food.setPosition(randomX, randomY);
       isEpicFood = Math.random() < 0.2;
 
@@ -244,26 +246,36 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         foodTimer = 5000;
         food.alpha = 1;
         food.setScale(0);
-        scene.tweens.add({ targets: food, scale: 0.15, duration: 400, ease: 'Back.out' });
+        scene.tweens.add({ targets: food, scale: 0.2, duration: 400, ease: 'Back.out' });
         sfx.playEpicSpawn();
       } else {
         const standardFoods = ['food_normal', 'food_blue', 'food_purple', 'food_red'];
         food.setTexture(Phaser.Math.RND.pick(standardFoods));
         food.alpha = 1;
-        food.setScale(0.12); 
+        food.setScale(0.18); // Made food slightly bigger so it's easier to hit
       }
     }
 
     function eatFood(scene: Phaser.Scene) {
       sfx.playEat();
-      for(let i=0; i<3; i++) { // Grow by 3 segments to keep it tight
+      
+      // FIX: Grow 6 solid segments per food
+      for(let i=0; i<6; i++) { 
         const lastSegment = snakeBody[snakeBody.length - 1];
         lastSegment.setTexture('classic_body');
+        
         const newTail = scene.add.sprite(lastSegment.x, lastSegment.y, 'classic_tail');
         newTail.setDepth(lastSegment.depth - 1);
-        newTail.setScale(0.02); 
+        newTail.setScale(BODY_SCALE); 
         snakeBody.push(newTail);
+
+        // FIX: Pad the pathHistory so the new segments don't get stuck!
+        for(let j=0; j<SPACING_INDEX; j++) {
+          const lastHistory = pathHistory[pathHistory.length - 1];
+          if (lastHistory) pathHistory.push({ ...lastHistory });
+        }
       }
+
       score += isEpicFood ? 20 : 5;
       scoreText.setText(`YIELD: ${score} cUSD`);
       scene.tweens.add({ targets: scoreText, scale: 1.2, duration: 100, yoyo: true });
@@ -278,13 +290,17 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         for (let i = 0; i < snakeBody.length; i++) snakeBody[i].destroy();
         snakeBody = [];
         pathHistory = [];
-        head.setPosition(1000, 1000);
-        head.setData('moveAngle', 0);
+        head.setPosition(1500, 1500);
+        head.setData('moveAngle', -Math.PI / 2);
         head.setVelocity(0, 0);
 
-        for(let i=0; i<15; i++) {
-          const texture = i === 14 ? 'classic_tail' : 'classic_body';
-          const bodyPart = scene.add.sprite(1000, 1000, texture);
+        for (let i = 0; i <= 25 * SPACING_INDEX + 10; i++) {
+          pathHistory.push({ x: 1500, y: 1500 + (i * RECORD_DISTANCE), moveAngle: -Math.PI / 2 });
+        }
+
+        for(let i=0; i<20; i++) {
+          const texture = i === 19 ? 'classic_tail' : 'classic_body';
+          const bodyPart = scene.add.sprite(1500, 1500, texture);
           bodyPart.setDepth(999 - i);
           bodyPart.setScale(BODY_SCALE); 
           snakeBody.push(bodyPart);
