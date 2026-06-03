@@ -1,17 +1,18 @@
 'use client';
 
 interface MobileNavProps {
-  activeTab: 'home' | 'shop' | 'inventory' | 'clans' | 'profile';
-  setActiveTab: (tab: 'home' | 'shop' | 'inventory' | 'clans' | 'profile') => void;
+  // FIXED: Expanded type safety matrix definitions to natively support the daily tournament panel destination
+  activeTab: 'home' | 'shop' | 'inventory' | 'clans' | 'profile' | 'tournament';
+  setActiveTab: (tab: 'home' | 'shop' | 'inventory' | 'clans' | 'profile' | 'tournament') => void;
 }
 
 export default function MobileNav({ activeTab, setActiveTab }: MobileNavProps) {
   const navItems = [
     { id: 'home', label: 'Home', icon: '🏠' },
+    { id: 'tournament', label: 'Grand Prix', icon: '🏆' }, // UPDATED: Injected easy shortcut access to cash reward brackets
     { id: 'shop', label: 'Shop', icon: '🛒' },
-    { id: 'inventory', label: 'Inventory', icon: '🎒' },
-    { id: 'clans', label: 'Clans', icon: '🛡️' },
-    { id: 'profile', label: 'Profile', icon: '👤' },
+    { id: 'inventory', label: 'Assets', icon: '🎒' },
+    { id: 'clans', label: 'Syndicate', icon: '🛡️' },
   ] as const;
 
   return (
