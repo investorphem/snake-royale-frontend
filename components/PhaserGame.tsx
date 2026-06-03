@@ -3,6 +3,78 @@
 import { useEffect, useRef } from 'react';
 import * as Phaser from 'phaser';
 
+// ==========================================
+// PREMIUM ZERO-LATENCY AUDIO SYNTHESIZER
+// Generates SFX mathematically without .mp3 files
+// ==========================================
+class AudioSynth {
+  private ctx: AudioContext | null = null;
+
+  private init() {
+    if (!this.ctx && typeof window !== 'undefined') {
+      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    // Browsers require audio context to be resumed after user interaction
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  }
+
+  playEat() {
+    this.init();
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, this.ctx.currentTime); // High pitch
+    osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.08); // Sweep up
+    gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.1);
+  }
+
+  playEpicSpawn() {
+    this.init();
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.50]; // Magical Chime Chord
+    notes.forEach((freq, index) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + (index * 0.04));
+      gain.gain.setValueAtTime(0.15, now + (index * 0.04));
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now + (index * 0.04));
+      osc.stop(now + 0.4);
+    });
+  }
+
+  playDie() {
+    this.init();
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(40, this.ctx.currentTime + 0.4); // Bass drop
+    gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.4);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.4);
+  }
+}
+
+const sfx = new AudioSynth();
+// ==========================================
+
 interface PhaserGameProps {
   walletAddress?: string;
   onGameOver?: (score: number) => void;
@@ -48,25 +120,26 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     const EPIC_LIFESPAN = 5000;
 
     function preload(this: Phaser.Scene) {
-      // 1. Load Audio
-      this.load.audio('eat', '/sounds/eat.mp3');
-      this.load.audio('die', '/sounds/die.mp3');
-      this.load.audio('epic_spawn', '/sounds/epic_spawn.mp3');
+      // Load Premium SVG Images
+      this.load.image('classic_head', '/assets/classic_head.svg');
+      this.load.image('classic_body', '/assets/classic_body.svg');
+      this.load.image('food_normal', '/assets/food_normal.svg');
+      this.load.image('food_epic', '/assets/food_epic.svg');
+      this.load.image('food_blue', '/assets/food_blue.svg');
+      this.load.image('food_purple', '/assets/food_purple.svg');
+      this.load.image('food_red', '/assets/food_red.svg');
 
-      // 2. Load Premium Images
-      this.load.image('classic_head', '/assets/classic_head.png');
-      this.load.image('classic_body', '/assets/classic_body.png');
-      this.load.image('food_normal', '/assets/food_normal.png');
-      this.load.image('food_epic', '/assets/food_epic.png');
-
-      // 3. Fallback Graphics (In case images are missing, prevents crashes)
+      // Fallback Graphics (In case SVG files are missing, prevents crashes)
       this.load.on('loaderror', (fileObj: any) => {
         console.warn('Missing asset, using fallback for:', fileObj.key);
         const g = this.add.graphics();
         if (fileObj.key.includes('head')) { g.fillStyle(0x22c55e); g.fillCircle(15, 15, 15); }
         else if (fileObj.key.includes('body')) { g.fillStyle(0x16a34a); g.fillCircle(12, 12, 12); }
         else if (fileObj.key.includes('epic')) { g.fillStyle(0xeab308); g.fillCircle(15, 15, 15); }
-        else { g.fillStyle(0x3b82f6); g.fillCircle(10, 10, 10); }
+        else if (fileObj.key.includes('blue')) { g.fillStyle(0x3b82f6); g.fillCircle(10, 10, 10); }
+        else if (fileObj.key.includes('purple')) { g.fillStyle(0xc084fc); g.fillCircle(10, 10, 10); }
+        else if (fileObj.key.includes('red')) { g.fillStyle(0xf87171); g.fillCircle(10, 10, 10); }
+        else { g.fillStyle(0x4ade80); g.fillCircle(10, 10, 10); } 
         g.generateTexture(fileObj.key, 30, 30);
         g.destroy();
       });
@@ -101,7 +174,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       this.cameras.main.setBounds(0, 0, 2000, 2000);
 
       // UI (Fixed to Camera)
-      scoreText = this.add.text(20, 20, 'LENGTH: 1,248', { 
+      scoreText = this.add.text(20, 20, 'YIELD: 0 cUSD', { 
         fontSize: '24px', 
         fontFamily: 'sans-serif',
         color: '#ffffff', 
@@ -144,7 +217,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         
         if (targetPos) {
           snakeBody[i].setPosition(targetPos.x, targetPos.y);
-          // Optional: snakeBody[i].rotation = targetPos.rotation;
         }
       }
 
@@ -182,18 +254,22 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         food.setScale(0);
         scene.tweens.add({ targets: food, scale: 1.5, duration: 400, ease: 'Back.out' });
         
-        // Play spawn sound if loaded
-        if (scene.cache.audio.exists('epic_spawn')) scene.sound.play('epic_spawn', { volume: 0.5 });
+        // Trigger Synthesized Chime Sound
+        sfx.playEpicSpawn();
       } else {
-        food.setTexture('food_normal');
+        // Randomize standard food colors
+        const standardFoods = ['food_normal', 'food_blue', 'food_purple', 'food_red'];
+        const randomSkin = Phaser.Math.RND.pick(standardFoods);
+        
+        food.setTexture(randomSkin);
         food.alpha = 1;
         food.setScale(1);
       }
     }
 
     function eatFood(scene: Phaser.Scene) {
-      // Play Audio
-      if (scene.cache.audio.exists('eat')) scene.sound.play('eat', { volume: 0.6 });
+      // Trigger Synthesized Pop Sound
+      sfx.playEat();
 
       // Grow Snake
       const tail = snakeBody[snakeBody.length - 1];
@@ -213,7 +289,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     }
 
     function triggerDeath(scene: Phaser.Scene) {
-      if (scene.cache.audio.exists('die')) scene.sound.play('die');
+      // Trigger Synthesized Crash/Bass Drop Sound
+      sfx.playDie();
       
       if (score > 0) {
         onGameOverRef.current?.(score);

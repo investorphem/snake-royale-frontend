@@ -1,0 +1,13 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="gradCyber" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#f0abfc"/>
+      <stop offset="50%" stop-color="#9333ea"/>
+      <stop offset="100%" stop-color="#4c1d95"/>
+    </radialGradient>
+  </defs>
+  
+  <circle cx="32" cy="32" r="30" fill="url(#gradCyber)"/>
+  
+  <ellipse cx="24" cy="18" rx="12" ry="6" fill="#ffffff" opacity="0.3" transform="rotate(-25 24 18)"/>
+</svg>
