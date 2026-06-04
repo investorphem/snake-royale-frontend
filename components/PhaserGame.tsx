@@ -137,6 +137,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     let isEating = false;
 
     function preload(this: Phaser.Scene) {
+      // Load all premium assets into the Phaser engine
       this.load.image('arena_default', '/assets/arena_default.png');
       this.load.image('classic_head', '/assets/classic_head.png');
       this.load.image('classic_body', '/assets/classic_body.png');
@@ -172,6 +173,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         snakeBody.push(bodyPart);
       }
 
+      // Initial food spawn uses the premium assets loaded in preload()
       food = this.physics.add.sprite(0, 0, 'food_normal');
       food.setDepth(5);
 
@@ -317,6 +319,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       food.setPosition(randomX, randomY);
       isEpicFood = Math.random() < 0.2;
 
+      // Applying premium food images dynamically
       if (isEpicFood) {
         food.setTexture('food_epic');
         foodTimer = 5000;
@@ -478,12 +481,23 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
           </div>
         </div>
 
-        {/* BOTTOM ROW: Power-up Buttons */}
+        {/* BOTTOM ROW: Premium Image Power-up Buttons */}
         <div className="flex justify-end items-end w-full pb-4 pr-2">
            <div className="flex gap-4 pointer-events-auto">
-              <button className="w-16 h-16 rounded-full bg-yellow-500/20 border-2 border-yellow-500 text-yellow-400 flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(234,179,8,0.4)] active:scale-90 transition-all">⚡</button>
-              <button className="w-16 h-16 rounded-full bg-blue-500/20 border-2 border-blue-500 text-blue-400 flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(59,130,246,0.4)] active:scale-90 transition-all">🛡️</button>
-              <button className="w-16 h-16 rounded-full bg-purple-500/20 border-2 border-purple-500 text-purple-400 flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(168,85,247,0.4)] active:scale-90 transition-all">🧲</button>
+              {/* SPEED POWER-UP */}
+              <button className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-md border-2 border-yellow-500/50 flex items-center justify-center shadow-[0_0_20px_rgba(234,179,8,0.3)] active:scale-90 transition-all p-3">
+                <img src="/assets/powerup_speed.png" alt="Speed" className="w-full h-full object-contain drop-shadow-md" />
+              </button>
+              
+              {/* SHIELD POWER-UP */}
+              <button className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-md border-2 border-blue-500/50 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.3)] active:scale-90 transition-all p-3">
+                <img src="/assets/powerup_shield.png" alt="Shield" className="w-full h-full object-contain drop-shadow-md" />
+              </button>
+
+              {/* MAGNET POWER-UP */}
+              <button className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-md border-2 border-purple-500/50 flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.3)] active:scale-90 transition-all p-3">
+                <img src="/assets/powerup_magnet.png" alt="Magnet" className="w-full h-full object-contain drop-shadow-md" />
+              </button>
            </div>
         </div>
         
