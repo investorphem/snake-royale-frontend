@@ -166,15 +166,13 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     // ---------------------------------------------------------
     // 🛠️ AAA HARD-LOCKED SCALING ENGINE 🛠️
     // ---------------------------------------------------------
-    // Tweak these TWO numbers until your head and body match perfectly!
     const HEAD_SCALE = 0.25;  
     const BODY_SCALE = 0.15;  
-    
-    const VISUAL_OFFSET = Math.PI / 2; // For upward facing head
+    const VISUAL_OFFSET = Math.PI / 2; 
     const BASE_SPEED = 280; 
-    const RECORD_DISTANCE = 4; // Path smoothness
-    const SPACING_INDEX = 5;   // Scale overlap density
-    const COLLISION_RADIUS = 30; // Pixel radius for death
+    const RECORD_DISTANCE = 4; 
+    const SPACING_INDEX = 5;   
+    const COLLISION_RADIUS = 30; 
     // ---------------------------------------------------------
 
     const config: Phaser.Types.Core.GameConfig = {
@@ -213,7 +211,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     function preload(this: Phaser.Scene) {
       this.load.image('arena_default', '/assets/arena_default.png');
       this.load.image('classic_head', '/assets/classic_head.png');
-      this.load.image('classic_body', '/assets/classic_body.png'); // MUST BE A CIRCLE
+      this.load.image('classic_body', '/assets/classic_body.png'); 
       this.load.image('food_normal', '/assets/food_normal.png');
       this.load.image('food_epic', '/assets/food_epic.png');
     }
@@ -239,9 +237,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       head.setScale(HEAD_SCALE); 
       head.setCollideWorldBounds(true);
       head.setData('moveAngle', -Math.PI / 2); 
-      
-      // 3D Drop Shadow for Premium Feel
-      head.setDropShadow = true; 
+
+      // (REMOVED INVALID SETDROPSHADOW LINE TO FIX VERCEL BUILD)
 
       tongue = this.add.sprite(1500, 1500, 'premium_tongue');
       tongue.setDepth(999); 
@@ -429,7 +426,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       const lastPos = pathHistory[0];
       const distToLast = Phaser.Math.Distance.Between(head.x, head.y, lastPos.x, lastPos.y);
 
-      // Smooth Interpolation from your Guide
       if (distToLast >= RECORD_DISTANCE) {
         const steps = Math.floor(distToLast / RECORD_DISTANCE);
         for (let s = 1; s <= steps; s++) {
@@ -444,9 +440,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         }
       }
 
-      const totalSegments = snakeBody.length;
-
-      for (let i = 0; i < totalSegments; i++) {
+      for (let i = 0; i < snakeBody.length; i++) {
         const historyIndex = (i + 1) * SPACING_INDEX;
         const targetPos = pathHistory[historyIndex];
 
@@ -457,11 +451,10 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
           const angleToFront = Phaser.Math.Angle.Between(snakeBody[i].x, snakeBody[i].y, frontSegment.x, frontSegment.y);
           snakeBody[i].rotation = angleToFront + VISUAL_OFFSET; 
 
-          // Seamless Tapering
-          const taperPoint = Math.floor(totalSegments * 0.6); 
-          if (i > taperPoint) {
-            const taperRatio = (i - taperPoint) / (totalSegments - taperPoint);
-            const scaleDown = BODY_SCALE - (taperRatio * (BODY_SCALE - 0.05));
+          const taperStart = snakeBody.length - 15;
+          if (i > taperStart) {
+            const step = (BODY_SCALE - 0.05) / 15;
+            const scaleDown = BODY_SCALE - ((i - taperStart) * step);
             snakeBody[i].setScale(Math.max(scaleDown, 0.05)); 
           } else {
             snakeBody[i].setScale(BODY_SCALE); 
@@ -483,8 +476,9 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         if (foodTimer <= 0) spawnFood(this); 
       }
 
-      if (pendingGrowth > 0 && time % 30 < 10) {
+      if (pendingGrowth > 0 && time % 60 < 16) {
         const lastSegment = snakeBody[snakeBody.length - 1];
+        
         const newTail = this.add.sprite(lastSegment.x, lastSegment.y, 'classic_body');
         newTail.setDepth(lastSegment.depth - 1);
         newTail.setScale(BODY_SCALE);
@@ -552,7 +546,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       scene.tweens.add({
         targets: food, scale: 0, alpha: 0, duration: 100,
         onComplete: () => {
-          pendingGrowth += isEpicFood ? 12 : 4; 
+          pendingGrowth += isEpicFood ? 8 : 4;
           score += points;
           window.dispatchEvent(new CustomEvent('updatePhaserScore', { detail: score }));
           spawnFood(scene);
