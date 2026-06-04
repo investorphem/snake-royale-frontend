@@ -18,22 +18,17 @@ class AudioSynth {
   playHiss() {
     this.init();
     if (!this.ctx) return;
-    
     const bufferSize = this.ctx.sampleRate * 0.3; 
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1; 
-    }
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1; 
     
     const noise = this.ctx.createBufferSource();
     noise.buffer = buffer;
-
     const bandpass = this.ctx.createBiquadFilter();
     bandpass.type = 'bandpass';
     bandpass.frequency.value = 4000; 
     bandpass.Q.value = 1.0;
-
     const gain = this.ctx.createGain();
     gain.gain.setValueAtTime(0, this.ctx.currentTime);
     gain.gain.linearRampToValueAtTime(0.15, this.ctx.currentTime + 0.05);
@@ -68,8 +63,8 @@ class AudioSynth {
     const now = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.50]; 
     notes.forEach((freq, index) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, now + (index * 0.04));
       gain.gain.setValueAtTime(0.15, now + (index * 0.04));
@@ -168,13 +163,16 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     // ---------------------------------------------------------
     // 🛠️ PREMIUM SNAKE TUNING 🛠️
     // ---------------------------------------------------------
-    const HEAD_SCALE = 0.22;  
-    const BODY_SCALE = 0.20; // Slightly smaller than head for a realistic flow
-    const VISUAL_OFFSET = Math.PI / 2; // Keeps the head & body aligned with movement
+    const HEAD_SCALE = 0.18;  
+    
+    // ADJUST THIS based on your new image size! If it looks too big/small compared to the head, tweak it.
+    const BODY_SCALE = 0.15; 
+    
+    const VISUAL_OFFSET = Math.PI / 2; // Matches Top-Down Head Perfectly
     
     const BASE_SPEED = 280; 
     const RECORD_DISTANCE = 3; 
-    const SPACING_INDEX = 4; // Tighter spacing creates the seamless tube effect
+    const SPACING_INDEX = 5; // Distance between overlapping scales
     // ---------------------------------------------------------
 
     const config: Phaser.Types.Core.GameConfig = {
@@ -215,11 +213,12 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     let isShielded = false;
 
     function preload(this: Phaser.Scene) {
-      // 🟢 WE ARE BACK TO USING YOUR PREMIUM IMAGE ASSETS! 🟢
       this.load.image('arena_default', '/assets/arena_default.png');
       this.load.image('classic_head', '/assets/classic_head.png');
+      
+      // 🟢 WE ARE LOADING YOUR CUSTOM CIRCULAR SCALES 🟢
       this.load.image('classic_body', '/assets/classic_body.png');
-      this.load.image('classic_tail', '/assets/classic_tail.png'); 
+      
       this.load.image('food_normal', '/assets/food_normal.png');
       this.load.image('food_epic', '/assets/food_epic.png');
     }
@@ -243,12 +242,14 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       tgfx.generateTexture('premium_tongue', 30, 40);
       tgfx.destroy();
 
+      // INITIALIZE HEAD
       head = this.physics.add.sprite(1500, 1500, 'classic_head');
       head.setDepth(1000); 
       head.setScale(HEAD_SCALE); 
       head.setCollideWorldBounds(true);
       head.setData('moveAngle', -Math.PI / 2); 
 
+      // INITIALIZE TONGUE
       tongue = this.add.sprite(1500, 1500, 'premium_tongue');
       tongue.setDepth(999); 
       tongue.setVisible(false);
@@ -257,10 +258,9 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         pathHistory.push({ x: 1500, y: 1500 + (i * RECORD_DISTANCE), moveAngle: -Math.PI / 2 });
       }
 
-      // Initial Snake Body
-      for(let i=0; i<20; i++) {
-        const texture = i === 19 ? 'classic_tail' : 'classic_body';
-        const bodyPart = this.add.sprite(1500, 1500, texture);
+      // INITIALIZE CUSTOM IMAGE BODY
+      for(let i=0; i<25; i++) {
+        const bodyPart = this.add.sprite(1500, 1500, 'classic_body');
         bodyPart.setDepth(998 - i);
         bodyPart.setScale(BODY_SCALE); 
         snakeBody.push(bodyPart);
@@ -300,9 +300,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
         snakeBody.forEach(s => s.destroy());
         snakeBody = [];
-        for(let i=0; i<20; i++) {
-          const texture = i === 19 ? 'classic_tail' : 'classic_body';
-          const bodyPart = this.add.sprite(1500, 1500, texture);
+        for(let i=0; i<25; i++) {
+          const bodyPart = this.add.sprite(1500, 1500, 'classic_body');
           bodyPart.setDepth(998 - i);
           bodyPart.setScale(BODY_SCALE); 
           snakeBody.push(bodyPart);
@@ -422,9 +421,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         if (!isFlicking && Math.random() < 0.1) flickTongue(this);
       }
       
-      if (Math.random() < 0.005) {
-        flickTongue(this);
-      }
+      if (Math.random() < 0.005) flickTongue(this);
 
       if (foodDistance < magnetRange && !isEating) {
         const pullAngle = Phaser.Math.Angle.Between(food.x, food.y, head.x, head.y);
@@ -451,7 +448,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         }
       }
 
-      const collisionRadius = head.displayWidth * 0.35; 
+      const collisionRadius = 18; 
 
       for (let i = 0; i < snakeBody.length; i++) {
         const historyIndex = (i + 1) * SPACING_INDEX;
@@ -460,10 +457,10 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         if (targetPos) {
           snakeBody[i].setPosition(targetPos.x, targetPos.y);
           
-          // 🟢 ROTATION IS BACK ON: This forces your custom body scales to bend perfectly!
+          // 🟢 ROTATION IS BACK ON: Makes the scales curve with the path
           const frontSegment = i === 0 ? head : snakeBody[i - 1];
           const angleToFront = Phaser.Math.Angle.Between(snakeBody[i].x, snakeBody[i].y, frontSegment.x, frontSegment.y);
-          snakeBody[i].rotation = angleToFront + VISUAL_OFFSET;
+          snakeBody[i].rotation = angleToFront + VISUAL_OFFSET; 
 
           const taperStart = snakeBody.length - 15;
           if (i > taperStart) {
@@ -476,9 +473,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
           if (i > 15 && !isDead && !isShielded) {
             const bodyDist = Phaser.Math.Distance.Between(head.x, head.y, snakeBody[i].x, snakeBody[i].y);
-            if (bodyDist < collisionRadius) {
-              triggerDeath(this);
-            }
+            if (bodyDist < collisionRadius) triggerDeath(this);
           }
         }
       }
@@ -492,9 +487,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       if (pendingGrowth > 0 && time % 60 < 16) {
         const lastSegment = snakeBody[snakeBody.length - 1];
-        lastSegment.setTexture('classic_body'); // Restore previous tail to body
         
-        const newTail = this.add.sprite(lastSegment.x, lastSegment.y, 'classic_tail');
+        const newTail = this.add.sprite(lastSegment.x, lastSegment.y, 'classic_body');
         newTail.setDepth(lastSegment.depth - 1);
         newTail.setScale(BODY_SCALE);
         if (isShielded) newTail.setTint(0x60a5fa);
@@ -526,13 +520,13 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         food.setTexture('food_epic');
         foodTimer = 5000;
         food.alpha = 1;
-        food.setScale(0);
-        scene.tweens.add({ targets: food, scale: 0.20, duration: 400, ease: 'Back.out' });
+        food.setScale(0.25);
+        scene.tweens.add({ targets: food, scale: 0.30, duration: 400, ease: 'Back.out' });
         sfx.playEpicSpawn();
       } else {
         food.setTexture('food_normal');
         food.alpha = 1;
-        food.setScale(0.15); 
+        food.setScale(0.18); 
       }
     }
 
