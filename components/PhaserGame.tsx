@@ -46,7 +46,6 @@ class AudioSynth {
     this.init();
     const ctx = this.ctx;
     if (!ctx) return;
-
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
@@ -64,11 +63,9 @@ class AudioSynth {
     this.init();
     const ctx = this.ctx;
     if (!ctx) return;
-
     const now = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.50]; 
     notes.forEach((freq, index) => {
-      // FIX: Uses the local 'ctx' constant so TypeScript knows it is never null inside the loop!
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'triangle';
@@ -86,7 +83,6 @@ class AudioSynth {
     this.init();
     const ctx = this.ctx;
     if (!ctx) return;
-
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sawtooth';
@@ -104,7 +100,6 @@ class AudioSynth {
     this.init();
     const ctx = this.ctx;
     if (!ctx) return;
-
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'square';
@@ -136,7 +131,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
   const [currentScore, setCurrentScore] = useState(0);
   const [currentKills, setCurrentKills] = useState(0);
   const [inventoryBalances, setInventoryBalances] = useState({ speed: 3, shield: 2, magnet: 3 });
-  
   const [gameOverData, setGameOverData] = useState<{score: number, kills: number} | null>(null);
 
   useEffect(() => { onGameOverRef.current = onGameOver; }, [onGameOver]);
@@ -144,10 +138,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
   useEffect(() => {
     const handleScoreUpdate = (e: any) => setCurrentScore(e.detail);
     const handleGameOverUI = (e: any) => setGameOverData(e.detail);
-    
     window.addEventListener('updatePhaserScore', handleScoreUpdate);
     window.addEventListener('showGameOver', handleGameOverUI);
-    
     return () => {
       window.removeEventListener('updatePhaserScore', handleScoreUpdate);
       window.removeEventListener('showGameOver', handleGameOverUI);
@@ -172,28 +164,22 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     if (!gameRef.current || phaserInstance.current) return;
 
     // ---------------------------------------------------------
-    // 🛠️ PREMIUM AAA SNAKE CALIBRATION 🛠️
+    // 🛠️ AAA HARD-LOCKED SCALING ENGINE 🛠️
     // ---------------------------------------------------------
-    const HEAD_SCALE = 0.22;  
-    const BODY_SCALE = 0.20; 
+    // Tweak these TWO numbers until your head and body match perfectly!
+    const HEAD_SCALE = 0.25;  
+    const BODY_SCALE = 0.15;  
     
-    const VISUAL_OFFSET = Math.PI / 2; 
-    
+    const VISUAL_OFFSET = Math.PI / 2; // For upward facing head
     const BASE_SPEED = 280; 
-    const RECORD_DISTANCE = 4; 
-    const SPACING_INDEX = 4;   
-    
-    const COLLISION_RADIUS = 80; 
+    const RECORD_DISTANCE = 4; // Path smoothness
+    const SPACING_INDEX = 5;   // Scale overlap density
+    const COLLISION_RADIUS = 30; // Pixel radius for death
     // ---------------------------------------------------------
 
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
-      scale: {
-        mode: Phaser.Scale.RESIZE,
-        parent: gameRef.current,
-        width: '100%',
-        height: '100%',
-      },
+      scale: { mode: Phaser.Scale.RESIZE, parent: gameRef.current, width: '100%', height: '100%' },
       backgroundColor: '#06090E',
       physics: { default: 'arcade', arcade: { debug: false } },
       scene: { preload, create, update }
@@ -207,8 +193,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     let tongue: Phaser.GameObjects.Sprite;
     let tongueOffset = 0;
     let isFlicking = false;
-
-    let trailEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
 
     let joystickBase: Phaser.GameObjects.Arc;
     let joystickThumb: Phaser.GameObjects.Arc;
@@ -229,7 +213,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     function preload(this: Phaser.Scene) {
       this.load.image('arena_default', '/assets/arena_default.png');
       this.load.image('classic_head', '/assets/classic_head.png');
-      this.load.image('classic_body', '/assets/classic_body.png');
+      this.load.image('classic_body', '/assets/classic_body.png'); // MUST BE A CIRCLE
       this.load.image('food_normal', '/assets/food_normal.png');
       this.load.image('food_epic', '/assets/food_epic.png');
     }
@@ -249,21 +233,25 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       tgfx.generateTexture('premium_tongue', 30, 40);
       tgfx.destroy();
 
+      // HEAD
       head = this.physics.add.sprite(1500, 1500, 'classic_head');
       head.setDepth(1000); 
       head.setScale(HEAD_SCALE); 
       head.setCollideWorldBounds(true);
       head.setData('moveAngle', -Math.PI / 2); 
-      targetJoystickAngle = -Math.PI / 2;
+      
+      // 3D Drop Shadow for Premium Feel
+      head.setDropShadow = true; 
 
       tongue = this.add.sprite(1500, 1500, 'premium_tongue');
       tongue.setDepth(999); 
       tongue.setVisible(false);
 
-      for (let i = 0; i <= 40 * SPACING_INDEX + 10; i++) {
+      for (let i = 0; i <= 60 * SPACING_INDEX + 10; i++) {
         pathHistory.push({ x: 1500, y: 1500 + (i * RECORD_DISTANCE), moveAngle: -Math.PI / 2 });
       }
 
+      // BODY
       for(let i=0; i<25; i++) {
         const bodyPart = this.add.sprite(1500, 1500, 'classic_body');
         bodyPart.setDepth(998 - i);
@@ -278,15 +266,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       gfx.fillStyle(0xffffff); gfx.fillCircle(4, 4, 4);
       gfx.generateTexture('foodSpark', 8, 8);
       gfx.destroy();
-
-      trailEmitter = this.add.particles(0, 0, 'foodSpark', {
-        scale: { start: 0.8, end: 0 },
-        alpha: { start: 0.4, end: 0 },
-        lifespan: 500,
-        tint: 0x4ade80, 
-        blendMode: 'ADD'
-      });
-      trailEmitter.stop(); 
 
       spawnFood(this);
 
@@ -308,7 +287,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         targetJoystickAngle = -Math.PI / 2;
         head.setVisible(true);
 
-        for (let i = 0; i <= 40 * SPACING_INDEX + 10; i++) {
+        for (let i = 0; i <= 60 * SPACING_INDEX + 10; i++) {
           pathHistory.push({ x: 1500, y: 1500 + (i * RECORD_DISTANCE), moveAngle: -Math.PI / 2 });
         }
 
@@ -424,16 +403,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       this.physics.velocityFromRotation(currentMoveAngle, BASE_SPEED * powerUpSpeedMult, (head.body as Phaser.Physics.Arcade.Body).velocity);
       head.rotation = currentMoveAngle + VISUAL_OFFSET;
 
-      if (!isEating) {
-        if (powerUpSpeedMult > 1) {
-          head.setScale(HEAD_SCALE * 0.85, HEAD_SCALE * 1.15); 
-          const tail = snakeBody[snakeBody.length - 1];
-          if (tail) trailEmitter.emitParticleAt(tail.x, tail.y);
-        } else {
-          head.setScale(HEAD_SCALE);
-        }
-      }
-
       const snoutDist = head.displayWidth * 0.35; 
       const totalDist = snoutDist + tongueOffset;
       tongue.setPosition(
@@ -460,6 +429,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       const lastPos = pathHistory[0];
       const distToLast = Phaser.Math.Distance.Between(head.x, head.y, lastPos.x, lastPos.y);
 
+      // Smooth Interpolation from your Guide
       if (distToLast >= RECORD_DISTANCE) {
         const steps = Math.floor(distToLast / RECORD_DISTANCE);
         for (let s = 1; s <= steps; s++) {
@@ -474,7 +444,9 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         }
       }
 
-      for (let i = 0; i < snakeBody.length; i++) {
+      const totalSegments = snakeBody.length;
+
+      for (let i = 0; i < totalSegments; i++) {
         const historyIndex = (i + 1) * SPACING_INDEX;
         const targetPos = pathHistory[historyIndex];
 
@@ -485,22 +457,14 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
           const angleToFront = Phaser.Math.Angle.Between(snakeBody[i].x, snakeBody[i].y, frontSegment.x, frontSegment.y);
           snakeBody[i].rotation = angleToFront + VISUAL_OFFSET; 
 
-          const taperStart = snakeBody.length - 15;
-          if (i > taperStart) {
-            const step = (BODY_SCALE - 0.05) / 15;
-            const scaleDown = BODY_SCALE - ((i - taperStart) * step);
-            
-            if (powerUpSpeedMult > 1) {
-              snakeBody[i].setScale(Math.max(scaleDown, 0.05) * 0.85, Math.max(scaleDown, 0.05) * 1.15);
-            } else {
-              snakeBody[i].setScale(Math.max(scaleDown, 0.05)); 
-            }
+          // Seamless Tapering
+          const taperPoint = Math.floor(totalSegments * 0.6); 
+          if (i > taperPoint) {
+            const taperRatio = (i - taperPoint) / (totalSegments - taperPoint);
+            const scaleDown = BODY_SCALE - (taperRatio * (BODY_SCALE - 0.05));
+            snakeBody[i].setScale(Math.max(scaleDown, 0.05)); 
           } else {
-            if (powerUpSpeedMult > 1) {
-              snakeBody[i].setScale(BODY_SCALE * 0.85, BODY_SCALE * 1.15);
-            } else {
-              snakeBody[i].setScale(BODY_SCALE); 
-            }
+            snakeBody[i].setScale(BODY_SCALE); 
           }
 
           if (i > 15 && !isDead && !isShielded) {
@@ -519,9 +483,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         if (foodTimer <= 0) spawnFood(this); 
       }
 
-      if (pendingGrowth > 0 && time % 60 < 16) {
+      if (pendingGrowth > 0 && time % 30 < 10) {
         const lastSegment = snakeBody[snakeBody.length - 1];
-        
         const newTail = this.add.sprite(lastSegment.x, lastSegment.y, 'classic_body');
         newTail.setDepth(lastSegment.depth - 1);
         newTail.setScale(BODY_SCALE);
@@ -580,7 +543,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         targets: popup, y: popup.y - 120, alpha: 0, duration: 1000, ease: 'Cubic.out', onComplete: () => popup.destroy()
       });
 
-      scene.tweens.add({ targets: head, scaleX: HEAD_SCALE * 1.3, scaleY: HEAD_SCALE * 0.9, duration: 80, yoyo: true });
+      scene.tweens.add({ targets: head, scale: HEAD_SCALE * 1.3, duration: 80, yoyo: true });
 
       scene.add.particles(food.x, food.y, 'foodSpark', {
         speed: { min: 80, max: 250 }, lifespan: 400, quantity: 15, scale: { start: 0.5, end: 0 }
