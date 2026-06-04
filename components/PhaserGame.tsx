@@ -36,8 +36,8 @@ class AudioSynth {
     const now = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.50]; 
     notes.forEach((freq, index) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, now + (index * 0.04));
       gain.gain.setValueAtTime(0.15, now + (index * 0.04));
@@ -94,14 +94,9 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
   const phaserInstance = useRef<Phaser.Game | null>(null);
   const onGameOverRef = useRef(onGameOver);
 
-  // Sync Score, Kills, and Inventory to React UI
   const [currentScore, setCurrentScore] = useState(0);
   const [currentKills, setCurrentKills] = useState(0);
-  
-  // Power-up Inventory Balances
   const [inventoryBalances, setInventoryBalances] = useState({ speed: 3, shield: 2, magnet: 3 });
-
-  // 🚀 NEW: Game Over Overlay State
   const [gameOverData, setGameOverData] = useState<{score: number, kills: number} | null>(null);
 
   useEffect(() => { onGameOverRef.current = onGameOver; }, [onGameOver]);
@@ -119,7 +114,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     };
   }, []);
 
-  // React Handler to Trigger Power-ups
   const handleUsePowerup = (type: 'speed' | 'shield' | 'magnet') => {
     if (inventoryBalances[type] > 0 && !gameOverData) {
       setInventoryBalances(prev => ({ ...prev, [type]: prev[type] - 1 }));
@@ -128,20 +122,28 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     }
   };
 
+  // 🔄 RESTART GAME LOGIC (Without Reloading Page)
+  const handlePlayAgain = () => {
+    setGameOverData(null);
+    setCurrentScore(0);
+    window.dispatchEvent(new CustomEvent('restartGame'));
+  };
+
   useEffect(() => {
     if (!gameRef.current || phaserInstance.current) return;
 
     // ---------------------------------------------------------
-    // 🛠️ PREMIUM SNAKE TUNING & CALIBRATION 🛠️
+    // 🛠️ PREMIUM SNAKE TUNING 🛠️
     // ---------------------------------------------------------
-    const HEAD_SCALE = 0.22;  
+    const HEAD_SCALE = 0.18;  
+    const BODY_SCALE = 0.5; // Scaled up because our procedural body is high-res!
     
-    // VISUAL OFFSET: If your head looks upside down, change this to 0, Math.PI, or -Math.PI / 2
+    // NOTE: Change this to Math.PI / 2 or 0 if your snake head faces the wrong way
     const VISUAL_OFFSET = Math.PI; 
     
     const BASE_SPEED = 280; 
-    const RECORD_DISTANCE = 4; // Distance between recorded points
-    const SPACING_INDEX = 4;   // Spaces out the 3D spheres perfectly!
+    const RECORD_DISTANCE = 3; // Ultra tight recording for smooth curves
+    const SPACING_INDEX = 3;   // Perfectly overlaps the spheres into a tube
     // ---------------------------------------------------------
 
     const config: Phaser.Types.Core.GameConfig = {
@@ -173,7 +175,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     let isEating = false;
     let isDead = false;
 
-    // Power-up States
     let powerUpSpeedMult = 1;
     let magnetRange = 150;
     let isShielded = false;
@@ -181,9 +182,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     function preload(this: Phaser.Scene) {
       this.load.image('arena_default', '/assets/arena_default.png');
       this.load.image('classic_head', '/assets/classic_head.png');
-      
-      this.load.image('food_normal', '/assets/food_normal.png');
-      this.load.image('food_epic', '/assets/food_epic.png');
     }
 
     function create(this: Phaser.Scene) {
@@ -194,17 +192,36 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       // ========================================================
       // 🟢 PROCEDURAL 3D BODY GENERATOR (SLITHER.IO STYLE)
-      // Generates a perfect 3D sphere with lighting for the body
       // ========================================================
+      const radius = 24;
       const bgfx = this.make.graphics({ x: 0, y: 0 }, false);
-      bgfx.fillStyle(0x22c55e, 1); // Bright green base
-      bgfx.fillCircle(20, 20, 20);
-      bgfx.lineStyle(4, 0x14532d, 1); // Dark green scale outline
-      bgfx.strokeCircle(20, 20, 20);
-      bgfx.fillStyle(0xffffff, 0.35); // 3D Lighting Highlight
-      bgfx.fillCircle(14, 14, 8);
-      bgfx.generateTexture('premium_body', 40, 40);
+      bgfx.fillStyle(0x064e3b, 1); // Dark green outer shadow
+      bgfx.fillCircle(radius, radius, radius);
+      bgfx.fillStyle(0x16a34a, 1); // Mid layer
+      bgfx.fillCircle(radius, radius, radius - 4);
+      bgfx.fillStyle(0x4ade80, 1); // Bright center
+      bgfx.fillCircle(radius, radius, radius - 8);
+      bgfx.fillStyle(0x86efac, 0.7); // Specular gloss highlight
+      bgfx.fillCircle(radius, radius - 6, radius - 14);
+      bgfx.generateTexture('premium_body', radius*2, radius*2);
       bgfx.destroy();
+
+      // ========================================================
+      // 🔵 PROCEDURAL NEON FOOD GENERATOR
+      // ========================================================
+      const fgfx = this.make.graphics({ x: 0, y: 0 }, false);
+      fgfx.fillStyle(0x22c55e, 0.3); fgfx.fillCircle(16, 16, 16);
+      fgfx.fillStyle(0x4ade80, 0.6); fgfx.fillCircle(16, 16, 10);
+      fgfx.fillStyle(0xffffff, 1);   fgfx.fillCircle(16, 16, 4);
+      fgfx.generateTexture('premium_food', 32, 32);
+      fgfx.destroy();
+
+      const egfx = this.make.graphics({ x: 0, y: 0 }, false);
+      egfx.fillStyle(0xa855f7, 0.4); egfx.fillCircle(24, 24, 24);
+      egfx.fillStyle(0xd946ef, 0.8); egfx.fillCircle(24, 24, 14);
+      egfx.fillStyle(0xfef08a, 1);   egfx.fillCircle(24, 24, 6);
+      egfx.generateTexture('premium_food_epic', 48, 48);
+      egfx.destroy();
 
       head = this.physics.add.sprite(1500, 1500, 'classic_head');
       head.setDepth(1000); 
@@ -212,20 +229,20 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       head.setCollideWorldBounds(true);
       head.setData('moveAngle', -Math.PI / 2); 
 
-      // Pre-fill history so it spawns as a full line
-      for (let i = 0; i <= 35 * SPACING_INDEX + 10; i++) {
+      // Pre-fill history 
+      for (let i = 0; i <= 40 * SPACING_INDEX + 10; i++) {
         pathHistory.push({ x: 1500, y: 1500 + (i * RECORD_DISTANCE), moveAngle: -Math.PI / 2 });
       }
 
-      // Build initial 20-segment snake using the new 3D sphere
+      // Build initial smooth snake
       for(let i=0; i<20; i++) {
         const bodyPart = this.add.sprite(1500, 1500, 'premium_body');
         bodyPart.setDepth(999 - i);
-        bodyPart.setScale(0.8); 
+        bodyPart.setScale(BODY_SCALE); 
         snakeBody.push(bodyPart);
       }
 
-      food = this.physics.add.sprite(0, 0, 'food_normal');
+      food = this.physics.add.sprite(0, 0, 'premium_food');
       food.setDepth(5);
 
       const gfx = this.make.graphics({ x: 0, y: 0 });
@@ -243,7 +260,37 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       this.physics.add.overlap(head, food, () => eatFood(this), undefined, this);
 
       // =====================================
-      // ⚡ POWER-UP ACTIVATION ENGINE
+      // 🔄 RESTART GAME LISTENER
+      // =====================================
+      window.addEventListener('restartGame', () => {
+        isDead = false;
+        score = 0;
+        pendingGrowth = 0;
+        pathHistory = [];
+        
+        head.setPosition(1500, 1500);
+        head.setData('moveAngle', -Math.PI / 2);
+        head.setVisible(true);
+
+        for (let i = 0; i <= 40 * SPACING_INDEX + 10; i++) {
+          pathHistory.push({ x: 1500, y: 1500 + (i * RECORD_DISTANCE), moveAngle: -Math.PI / 2 });
+        }
+
+        snakeBody.forEach(s => s.destroy());
+        snakeBody = [];
+        for(let i=0; i<20; i++) {
+          const bodyPart = this.add.sprite(1500, 1500, 'premium_body');
+          bodyPart.setDepth(999 - i);
+          bodyPart.setScale(BODY_SCALE); 
+          snakeBody.push(bodyPart);
+        }
+        
+        window.dispatchEvent(new CustomEvent('updatePhaserScore', { detail: score }));
+        spawnFood(this);
+      });
+
+      // =====================================
+      // ⚡ POWER-UP ACTIVATION
       // =====================================
       const handlePowerupEvent = (e: any) => {
         if (isDead) return;
@@ -272,7 +319,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
           }, 8000);
         }
 
-        // Visual Feedback in Game
         const popup = this.add.text(head.x, head.y - 60, popupText, {
           fontSize: '32px', fontFamily: 'Arial', color: '#ffffff', fontStyle: '900', stroke: '#000000', strokeThickness: 6
         }).setOrigin(0.5).setDepth(3000);
@@ -283,16 +329,13 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       window.addEventListener('activatePowerup', handlePowerupEvent);
       this.events.on('destroy', () => window.removeEventListener('activatePowerup', handlePowerupEvent));
 
-      // =====================================
-      // ON-SCREEN REFLECTIVE VIRTUAL JOYSTICK
-      // =====================================
+      // Joystick Logic
       this.input.addPointer(2); 
-
       joystickBase = this.add.circle(0, 0, 70, 0xffffff, 0.15).setScrollFactor(0).setDepth(3000).setVisible(false);
       joystickThumb = this.add.circle(0, 0, 35, 0xffffff, 0.4).setScrollFactor(0).setDepth(3000).setVisible(false);
 
       this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => { 
-        if (pointer.x > this.cameras.main.width * 0.7) return; // Leave right side for powerups
+        if (pointer.x > this.cameras.main.width * 0.7) return; 
         if (isDead) return;
         
         isJoystickActive = true;
@@ -305,11 +348,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
           const angle = Phaser.Math.Angle.Between(joystickBase.x, joystickBase.y, pointer.x, pointer.y);
           const dist = Math.min(Phaser.Math.Distance.Between(joystickBase.x, joystickBase.y, pointer.x, pointer.y), 45);
 
-          joystickThumb.setPosition(
-            joystickBase.x + Math.cos(angle) * dist,
-            joystickBase.y + Math.sin(angle) * dist
-          );
-
+          joystickThumb.setPosition(joystickBase.x + Math.cos(angle) * dist, joystickBase.y + Math.sin(angle) * dist);
           head.setData('moveAngle', angle);
         } 
       });
@@ -339,7 +378,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       if (foodDistance < 30 && !isEating) eatFood(this);
 
-      // Interpolation Physics
       const lastPos = pathHistory[0];
       const distToLast = Phaser.Math.Distance.Between(head.x, head.y, lastPos.x, lastPos.y);
 
@@ -357,8 +395,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         }
       }
 
-      // Exact collision radius derived from your head image size
-      const collisionRadius = head.displayWidth * 0.35;
+      const collisionRadius = 18; // Precise pixel collision distance
 
       for (let i = 0; i < snakeBody.length; i++) {
         const historyIndex = (i + 1) * SPACING_INDEX;
@@ -367,19 +404,17 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         if (targetPos) {
           snakeBody[i].setPosition(targetPos.x, targetPos.y);
           
-          // 🟢 CRITICAL: We do NOT rotate the body segments anymore! 
-          // Because they are generated 3D spheres, keeping rotation at 0 
-          // keeps the shadow/lighting perfectly static like a real 3D game.
+          // 🟢 SPHERES DO NOT ROTATE: Keeps 3D lighting perfectly static!
           snakeBody[i].rotation = 0; 
 
-          // Beautiful Tail Tapering
-          const taperStart = snakeBody.length - 12;
+          // Beautiful Tail Tapering down to 0.1 scale (creates perfect tail)
+          const taperStart = snakeBody.length - 15;
           if (i > taperStart) {
-            const step = (0.8 - 0.2) / 12;
-            const scaleDown = 0.8 - ((i - taperStart) * step);
-            snakeBody[i].setScale(Math.max(scaleDown, 0.2)); 
+            const step = (BODY_SCALE - 0.1) / 15;
+            const scaleDown = BODY_SCALE - ((i - taperStart) * step);
+            snakeBody[i].setScale(Math.max(scaleDown, 0.1)); 
           } else {
-            snakeBody[i].setScale(0.8); 
+            snakeBody[i].setScale(BODY_SCALE); 
           }
 
           // 💀 FATAL SELF COLLISION 💀
@@ -394,6 +429,10 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       if (isEpicFood) {
         foodTimer -= delta;
+        
+        // Throb effect for epic food
+        food.setScale(0.25 + Math.sin(time / 150) * 0.03);
+
         if (foodTimer < 1500) food.alpha = Math.floor(time / 100) % 2 === 0 ? 0.3 : 1;
         if (foodTimer <= 0) spawnFood(this); 
       }
@@ -403,7 +442,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         
         const newTail = this.add.sprite(lastSegment.x, lastSegment.y, 'premium_body');
         newTail.setDepth(lastSegment.depth - 1);
-        newTail.setScale(0.8);
+        newTail.setScale(BODY_SCALE);
         if (isShielded) newTail.setTint(0x60a5fa);
         snakeBody.push(newTail);
 
@@ -414,7 +453,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         pendingGrowth--;
       }
 
-      // Wall Collision Death
       if (head.x <= 20 || head.x >= 2980 || head.y <= 20 || head.y >= 2980) {
         if (!isShielded) triggerDeath(this);
         else {
@@ -431,14 +469,14 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       isEpicFood = Math.random() < 0.2;
 
       if (isEpicFood) {
-        food.setTexture('food_epic');
+        food.setTexture('premium_food_epic');
         foodTimer = 5000;
         food.alpha = 1;
         food.setScale(0);
         scene.tweens.add({ targets: food, scale: 0.25, duration: 400, ease: 'Back.out' });
         sfx.playEpicSpawn();
       } else {
-        food.setTexture('food_normal');
+        food.setTexture('premium_food');
         food.alpha = 1;
         food.setScale(0.2); 
       }
@@ -468,7 +506,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       scene.tweens.add({
         targets: food, scale: 0, alpha: 0, duration: 100,
         onComplete: () => {
-          pendingGrowth += isEpicFood ? 6 : 3;
+          pendingGrowth += isEpicFood ? 8 : 4;
           score += points;
           window.dispatchEvent(new CustomEvent('updatePhaserScore', { detail: score }));
           spawnFood(scene);
@@ -477,7 +515,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       });
     }
 
-    // 💀 UPDATED: Trigger Game Over UI
     function triggerDeath(scene: Phaser.Scene) {
       if (isDead) return;
       isDead = true;
@@ -485,18 +522,15 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       
       head.setVelocity(0, 0); 
       
-      // Explosion Particles
       scene.add.particles(head.x, head.y, 'foodSpark', {
         speed: { min: 50, max: 300 }, lifespan: 800, quantity: 40, scale: { start: 0.8, end: 0 }
       });
 
-      // Hide the snake instantly
       head.setVisible(false);
       snakeBody.forEach(s => s.setVisible(false));
 
       scene.cameras.main.shake(600, 0.04);
 
-      // Trigger the React Game Over Screen
       scene.time.delayedCall(1000, () => {
         window.dispatchEvent(new CustomEvent('showGameOver', { detail: { score, kills: 0 } }));
       });
@@ -514,7 +548,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
   return (
     <div className="fixed inset-0 w-full h-[100dvh] bg-[#06090E] z-[9999] overflow-hidden select-none touch-none">
       
-      {/* Phaser Canvas */}
       <div ref={gameRef} className="absolute inset-0 w-full h-full" />
 
       {/* ========================================================= */}
@@ -546,7 +579,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
            <div className="flex flex-col gap-3 w-full max-w-sm">
               <button 
-                onClick={() => window.location.reload()} 
+                onClick={handlePlayAgain} 
                 className="w-full bg-gradient-to-b from-[#a3e635] to-[#65a30d] text-black rounded-xl py-4 font-black text-lg shadow-[0_4px_0_#3f6212] active:shadow-[0_0px_0_#3f6212] active:translate-y-1 transition-all uppercase tracking-wider"
               >
                 PLAY AGAIN
@@ -565,9 +598,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       {!gameOverData && (
         <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 z-10">
           
-          {/* TOP ROW */}
           <div className="flex justify-between items-start w-full mt-2">
-            
             <button 
               onClick={() => onGameOverRef.current?.(currentScore)} 
               className="pointer-events-auto bg-black/50 backdrop-blur-md border border-white/10 w-10 h-10 rounded-xl flex items-center justify-center text-white transition-all active:scale-95 shadow-lg"
@@ -593,43 +624,20 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
             </div>
           </div>
 
-          {/* BOTTOM ROW: CLICKABLE POWERUPS */}
           <div className="flex justify-end items-end w-full pb-6 pr-2">
              <div className="flex gap-3 pointer-events-auto">
-                
-                {/* SPEED POWER-UP */}
-                <button 
-                  onClick={() => handleUsePowerup('speed')}
-                  className="relative w-[52px] h-[52px] rounded-full bg-black/60 backdrop-blur-md border-2 border-yellow-500/60 flex items-center justify-center shadow-[0_0_15px_rgba(234,179,8,0.3)] active:scale-90 transition-all p-2.5"
-                >
+                <button onClick={() => handleUsePowerup('speed')} className="relative w-[52px] h-[52px] rounded-full bg-black/60 backdrop-blur-md border-2 border-yellow-500/60 flex items-center justify-center shadow-[0_0_15px_rgba(234,179,8,0.3)] active:scale-90 transition-all p-2.5">
                   <img src="/assets/powerup_speed.png" alt="Speed" className={`w-full h-full object-contain ${inventoryBalances.speed === 0 ? 'opacity-30 grayscale' : 'drop-shadow-md'}`} />
-                  <span className="absolute -top-1 -right-1 bg-black border border-white/20 text-white text-[9px] w-[22px] h-[22px] rounded-full flex items-center justify-center font-black shadow-lg">
-                    {inventoryBalances.speed}
-                  </span>
+                  <span className="absolute -top-1 -right-1 bg-black border border-white/20 text-white text-[9px] w-[22px] h-[22px] rounded-full flex items-center justify-center font-black shadow-lg">{inventoryBalances.speed}</span>
                 </button>
-                
-                {/* SHIELD POWER-UP */}
-                <button 
-                  onClick={() => handleUsePowerup('shield')}
-                  className="relative w-[52px] h-[52px] rounded-full bg-black/60 backdrop-blur-md border-2 border-blue-500/60 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.3)] active:scale-90 transition-all p-2.5"
-                >
+                <button onClick={() => handleUsePowerup('shield')} className="relative w-[52px] h-[52px] rounded-full bg-black/60 backdrop-blur-md border-2 border-blue-500/60 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.3)] active:scale-90 transition-all p-2.5">
                   <img src="/assets/powerup_shield.png" alt="Shield" className={`w-full h-full object-contain ${inventoryBalances.shield === 0 ? 'opacity-30 grayscale' : 'drop-shadow-md'}`} />
-                  <span className="absolute -top-1 -right-1 bg-black border border-white/20 text-white text-[9px] w-[22px] h-[22px] rounded-full flex items-center justify-center font-black shadow-lg">
-                    {inventoryBalances.shield}
-                  </span>
+                  <span className="absolute -top-1 -right-1 bg-black border border-white/20 text-white text-[9px] w-[22px] h-[22px] rounded-full flex items-center justify-center font-black shadow-lg">{inventoryBalances.shield}</span>
                 </button>
-
-                {/* MAGNET POWER-UP */}
-                <button 
-                  onClick={() => handleUsePowerup('magnet')}
-                  className="relative w-[52px] h-[52px] rounded-full bg-black/60 backdrop-blur-md border-2 border-purple-500/60 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)] active:scale-90 transition-all p-2.5"
-                >
+                <button onClick={() => handleUsePowerup('magnet')} className="relative w-[52px] h-[52px] rounded-full bg-black/60 backdrop-blur-md border-2 border-purple-500/60 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)] active:scale-90 transition-all p-2.5">
                   <img src="/assets/powerup_magnet.png" alt="Magnet" className={`w-full h-full object-contain ${inventoryBalances.magnet === 0 ? 'opacity-30 grayscale' : 'drop-shadow-md'}`} />
-                  <span className="absolute -top-1 -right-1 bg-black border border-white/20 text-white text-[9px] w-[22px] h-[22px] rounded-full flex items-center justify-center font-black shadow-lg">
-                    {inventoryBalances.magnet}
-                  </span>
+                  <span className="absolute -top-1 -right-1 bg-black border border-white/20 text-white text-[9px] w-[22px] h-[22px] rounded-full flex items-center justify-center font-black shadow-lg">{inventoryBalances.magnet}</span>
                 </button>
-
              </div>
           </div>
           
