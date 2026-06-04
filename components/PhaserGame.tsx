@@ -14,6 +14,39 @@ class AudioSynth {
     }
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
   }
+  
+  // NEW: Procedural White Noise Hissing Synthesizer!
+  playHiss() {
+    this.init();
+    if (!this.ctx) return;
+    
+    const bufferSize = this.ctx.sampleRate * 0.3; // 0.3 seconds long
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1; // Pure White Noise
+    }
+    
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    // Filter the noise to sound exactly like a high-pitch snake hiss
+    const bandpass = this.ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.value = 4000; 
+    bandpass.Q.value = 1.0;
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0, this.ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.15, this.ctx.currentTime + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+    noise.connect(bandpass);
+    bandpass.connect(gain);
+    gain.connect(this.ctx.destination);
+    noise.start();
+  }
+
   playEat() {
     this.init();
     if (!this.ctx) return;
@@ -29,6 +62,7 @@ class AudioSynth {
     osc.start();
     osc.stop(this.ctx.currentTime + 0.1);
   }
+
   playEpicSpawn() {
     this.init();
     if (!this.ctx) return;
@@ -48,6 +82,7 @@ class AudioSynth {
       osc.stop(now + 0.4);
     });
   }
+
   playDie() {
     this.init();
     if (!this.ctx) return;
@@ -63,6 +98,7 @@ class AudioSynth {
     osc.start();
     osc.stop(this.ctx.currentTime + 0.4);
   }
+
   playPowerup() {
     this.init();
     if (!this.ctx) return;
@@ -104,10 +140,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
   useEffect(() => {
     const handleScoreUpdate = (e: any) => setCurrentScore(e.detail);
     const handleGameOverUI = (e: any) => setGameOverData(e.detail);
-    
     window.addEventListener('updatePhaserScore', handleScoreUpdate);
     window.addEventListener('showGameOver', handleGameOverUI);
-    
     return () => {
       window.removeEventListener('updatePhaserScore', handleScoreUpdate);
       window.removeEventListener('showGameOver', handleGameOverUI);
@@ -122,7 +156,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     }
   };
 
-  // 🔄 RESTART GAME LOGIC (Without Reloading Page)
   const handlePlayAgain = () => {
     setGameOverData(null);
     setCurrentScore(0);
@@ -136,14 +169,12 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     // 🛠️ PREMIUM SNAKE TUNING 🛠️
     // ---------------------------------------------------------
     const HEAD_SCALE = 0.18;  
-    const BODY_SCALE = 0.5; // Scaled up because our procedural body is high-res!
-    
-    // NOTE: Change this to Math.PI / 2 or 0 if your snake head faces the wrong way
-    const VISUAL_OFFSET = Math.PI; 
+    const BODY_SCALE = 0.5; 
+    const VISUAL_OFFSET = Math.PI / 2; // Matches Top-Down Head Perfectly
     
     const BASE_SPEED = 280; 
-    const RECORD_DISTANCE = 3; // Ultra tight recording for smooth curves
-    const SPACING_INDEX = 3;   // Perfectly overlaps the spheres into a tube
+    const RECORD_DISTANCE = 3; 
+    const SPACING_INDEX = 3;   
     // ---------------------------------------------------------
 
     const config: Phaser.Types.Core.GameConfig = {
@@ -164,6 +195,11 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     let pathHistory: { x: number, y: number, moveAngle: number }[] = [];
     let food: Phaser.Physics.Arcade.Sprite;
     
+    // NEW TONGUE VARIABLES
+    let tongue: Phaser.GameObjects.Sprite;
+    let tongueOffset = 0;
+    let isFlicking = false;
+
     let joystickBase: Phaser.GameObjects.Arc;
     let joystickThumb: Phaser.GameObjects.Arc;
     let isJoystickActive = false;
@@ -191,17 +227,32 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       grid.setAlpha(0.4);
 
       // ========================================================
-      // 🟢 PROCEDURAL 3D BODY GENERATOR (SLITHER.IO STYLE)
+      // 👅 PROCEDURAL FORKED TONGUE GENERATOR
+      // ========================================================
+      const tgfx = this.make.graphics({ x: 0, y: 0 }, false);
+      tgfx.lineStyle(3, 0xdc2626, 1); // Dark Red
+      tgfx.beginPath();
+      tgfx.moveTo(15, 30); // Base of tongue
+      tgfx.lineTo(15, 10); // Main stem
+      tgfx.lineTo(8, 0);   // Left Fork
+      tgfx.moveTo(15, 10);
+      tgfx.lineTo(22, 0);  // Right Fork
+      tgfx.strokePath();
+      tgfx.generateTexture('premium_tongue', 30, 40);
+      tgfx.destroy();
+
+      // ========================================================
+      // 🟢 PROCEDURAL 3D BODY GENERATOR
       // ========================================================
       const radius = 24;
       const bgfx = this.make.graphics({ x: 0, y: 0 }, false);
-      bgfx.fillStyle(0x064e3b, 1); // Dark green outer shadow
+      bgfx.fillStyle(0x064e3b, 1); 
       bgfx.fillCircle(radius, radius, radius);
-      bgfx.fillStyle(0x16a34a, 1); // Mid layer
+      bgfx.fillStyle(0x16a34a, 1); 
       bgfx.fillCircle(radius, radius, radius - 4);
-      bgfx.fillStyle(0x4ade80, 1); // Bright center
+      bgfx.fillStyle(0x4ade80, 1); 
       bgfx.fillCircle(radius, radius, radius - 8);
-      bgfx.fillStyle(0x86efac, 0.7); // Specular gloss highlight
+      bgfx.fillStyle(0x86efac, 0.7); 
       bgfx.fillCircle(radius, radius - 6, radius - 14);
       bgfx.generateTexture('premium_body', radius*2, radius*2);
       bgfx.destroy();
@@ -223,21 +274,25 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       egfx.generateTexture('premium_food_epic', 48, 48);
       egfx.destroy();
 
+      // INITIALIZE HEAD
       head = this.physics.add.sprite(1500, 1500, 'classic_head');
       head.setDepth(1000); 
       head.setScale(HEAD_SCALE); 
       head.setCollideWorldBounds(true);
       head.setData('moveAngle', -Math.PI / 2); 
 
-      // Pre-fill history 
+      // INITIALIZE TONGUE (Hidden under the head)
+      tongue = this.add.sprite(1500, 1500, 'premium_tongue');
+      tongue.setDepth(999); // Under head
+      tongue.setVisible(false);
+
       for (let i = 0; i <= 40 * SPACING_INDEX + 10; i++) {
         pathHistory.push({ x: 1500, y: 1500 + (i * RECORD_DISTANCE), moveAngle: -Math.PI / 2 });
       }
 
-      // Build initial smooth snake
       for(let i=0; i<20; i++) {
         const bodyPart = this.add.sprite(1500, 1500, 'premium_body');
-        bodyPart.setDepth(999 - i);
+        bodyPart.setDepth(998 - i);
         bodyPart.setScale(BODY_SCALE); 
         snakeBody.push(bodyPart);
       }
@@ -259,14 +314,12 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       this.physics.add.overlap(head, food, () => eatFood(this), undefined, this);
 
-      // =====================================
-      // 🔄 RESTART GAME LISTENER
-      // =====================================
       window.addEventListener('restartGame', () => {
         isDead = false;
         score = 0;
         pendingGrowth = 0;
         pathHistory = [];
+        tongueOffset = 0;
         
         head.setPosition(1500, 1500);
         head.setData('moveAngle', -Math.PI / 2);
@@ -280,7 +333,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         snakeBody = [];
         for(let i=0; i<20; i++) {
           const bodyPart = this.add.sprite(1500, 1500, 'premium_body');
-          bodyPart.setDepth(999 - i);
+          bodyPart.setDepth(998 - i);
           bodyPart.setScale(BODY_SCALE); 
           snakeBody.push(bodyPart);
         }
@@ -289,9 +342,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         spawnFood(this);
       });
 
-      // =====================================
-      // ⚡ POWER-UP ACTIVATION
-      // =====================================
       const handlePowerupEvent = (e: any) => {
         if (isDead) return;
         const type = e.detail;
@@ -329,7 +379,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       window.addEventListener('activatePowerup', handlePowerupEvent);
       this.events.on('destroy', () => window.removeEventListener('activatePowerup', handlePowerupEvent));
 
-      // Joystick Logic
       this.input.addPointer(2); 
       joystickBase = this.add.circle(0, 0, 70, 0xffffff, 0.15).setScrollFactor(0).setDepth(3000).setVisible(false);
       joystickThumb = this.add.circle(0, 0, 35, 0xffffff, 0.4).setScrollFactor(0).setDepth(3000).setVisible(false);
@@ -337,7 +386,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => { 
         if (pointer.x > this.cameras.main.width * 0.7) return; 
         if (isDead) return;
-        
         isJoystickActive = true;
         joystickBase.setPosition(pointer.x, pointer.y).setVisible(true);
         joystickThumb.setPosition(pointer.x, pointer.y).setVisible(true);
@@ -360,6 +408,32 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       });
     }
 
+    // =====================================
+    // 👅 TONGUE FLICK ANIMATION
+    // =====================================
+    function flickTongue(scene: Phaser.Scene) {
+      if (isFlicking || isEating || isDead) return;
+      isFlicking = true;
+      sfx.playHiss(); // 🐍 Trigger the procedural hiss!
+      tongue.setVisible(true);
+
+      scene.tweens.add({
+        targets: { offset: 0 },
+        offset: 35, // Distance tongue sticks out
+        duration: 150,
+        yoyo: true,
+        onUpdate: (tween) => {
+          tongueOffset = tween.getValue();
+        },
+        onComplete: () => {
+          tongueOffset = 0;
+          tongue.setVisible(false);
+          // Cooldown before next flick
+          scene.time.delayedCall(800, () => isFlicking = false);
+        }
+      });
+    }
+
     function update(this: Phaser.Scene, time: number, delta: number) {
       if (!head || !head.body || isDead) return;
 
@@ -368,7 +442,26 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       this.physics.velocityFromRotation(currentMoveAngle, BASE_SPEED * powerUpSpeedMult, (head.body as Phaser.Physics.Arcade.Body).velocity);
       head.rotation = currentMoveAngle + VISUAL_OFFSET;
 
+      // Update Tongue Position & Rotation
+      const snoutDist = head.displayWidth * 0.4; // Base position inside the mouth
+      const totalDist = snoutDist + tongueOffset;
+      tongue.setPosition(
+          head.x + Math.cos(currentMoveAngle) * totalDist,
+          head.y + Math.sin(currentMoveAngle) * totalDist
+      );
+      tongue.rotation = currentMoveAngle + VISUAL_OFFSET;
+
       const foodDistance = Phaser.Math.Distance.Between(head.x, head.y, food.x, food.y);
+
+      // AI BRAIN: If food is close, excitedly flick tongue to "taste" it!
+      if (foodDistance < 250 && foodDistance > 60) {
+        if (!isFlicking && Math.random() < 0.1) flickTongue(this);
+      }
+      
+      // AI BRAIN: Random idle flicking
+      if (Math.random() < 0.005) {
+        flickTongue(this);
+      }
 
       if (foodDistance < magnetRange && !isEating) {
         const pullAngle = Phaser.Math.Angle.Between(food.x, food.y, head.x, head.y);
@@ -395,7 +488,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         }
       }
 
-      const collisionRadius = 18; // Precise pixel collision distance
+      const collisionRadius = 18; 
 
       for (let i = 0; i < snakeBody.length; i++) {
         const historyIndex = (i + 1) * SPACING_INDEX;
@@ -403,11 +496,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
         if (targetPos) {
           snakeBody[i].setPosition(targetPos.x, targetPos.y);
-          
-          // 🟢 SPHERES DO NOT ROTATE: Keeps 3D lighting perfectly static!
           snakeBody[i].rotation = 0; 
 
-          // Beautiful Tail Tapering down to 0.1 scale (creates perfect tail)
           const taperStart = snakeBody.length - 15;
           if (i > taperStart) {
             const step = (BODY_SCALE - 0.1) / 15;
@@ -417,7 +507,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
             snakeBody[i].setScale(BODY_SCALE); 
           }
 
-          // 💀 FATAL SELF COLLISION 💀
           if (i > 15 && !isDead && !isShielded) {
             const bodyDist = Phaser.Math.Distance.Between(head.x, head.y, snakeBody[i].x, snakeBody[i].y);
             if (bodyDist < collisionRadius) {
@@ -429,10 +518,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       if (isEpicFood) {
         foodTimer -= delta;
-        
-        // Throb effect for epic food
         food.setScale(0.25 + Math.sin(time / 150) * 0.03);
-
         if (foodTimer < 1500) food.alpha = Math.floor(time / 100) % 2 === 0 ? 0.3 : 1;
         if (foodTimer <= 0) spawnFood(this); 
       }
@@ -521,6 +607,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       sfx.playDie();
       
       head.setVelocity(0, 0); 
+      tongue.setVisible(false);
       
       scene.add.particles(head.x, head.y, 'foodSpark', {
         speed: { min: 50, max: 300 }, lifespan: 800, quantity: 40, scale: { start: 0.8, end: 0 }
@@ -547,24 +634,18 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
   return (
     <div className="fixed inset-0 w-full h-[100dvh] bg-[#06090E] z-[9999] overflow-hidden select-none touch-none">
-      
       <div ref={gameRef} className="absolute inset-0 w-full h-full" />
 
-      {/* ========================================================= */}
       {/* 💀 GAME OVER OVERLAY SCREEN 💀 */}
-      {/* ========================================================= */}
       {gameOverData && (
         <div className="absolute inset-0 bg-black/80 backdrop-blur-md z-[99999] flex flex-col items-center justify-center p-6 animate-fade-in pointer-events-auto">
            <h2 className="text-5xl font-black text-white italic drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] mb-2 text-center tracking-tighter">
               GAME OVER
            </h2>
-           
            <div className="bg-[#111722] border border-white/10 rounded-3xl p-8 w-full max-w-sm flex flex-col items-center shadow-2xl mb-6 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#84cc16] to-[#22c55e]"></div>
-              
               <p className="text-gray-400 font-bold uppercase tracking-widest text-xs mb-1 mt-2">Total Yield</p>
               <p className="text-6xl font-black text-[#4ade80] mb-8 drop-shadow-md">{gameOverData.score}</p>
-
               <div className="w-full flex justify-between px-6 pb-2">
                 <div className="flex flex-col items-center">
                   <p className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-1">Kills</p>
@@ -576,45 +657,31 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
                 </div>
               </div>
            </div>
-
            <div className="flex flex-col gap-3 w-full max-w-sm">
-              <button 
-                onClick={handlePlayAgain} 
-                className="w-full bg-gradient-to-b from-[#a3e635] to-[#65a30d] text-black rounded-xl py-4 font-black text-lg shadow-[0_4px_0_#3f6212] active:shadow-[0_0px_0_#3f6212] active:translate-y-1 transition-all uppercase tracking-wider"
-              >
+              <button onClick={handlePlayAgain} className="w-full bg-gradient-to-b from-[#a3e635] to-[#65a30d] text-black rounded-xl py-4 font-black text-lg shadow-[0_4px_0_#3f6212] active:shadow-[0_0px_0_#3f6212] active:translate-y-1 transition-all uppercase tracking-wider">
                 PLAY AGAIN
               </button>
-              <button 
-                onClick={() => onGameOverRef.current?.(gameOverData.score)} 
-                className="w-full bg-[#1A1F2E] border border-white/10 text-white rounded-xl py-4 font-black text-sm active:bg-white/5 transition-all uppercase tracking-wider"
-              >
+              <button onClick={() => onGameOverRef.current?.(gameOverData.score)} className="w-full bg-[#1A1F2E] border border-white/10 text-white rounded-xl py-4 font-black text-sm active:bg-white/5 transition-all uppercase tracking-wider">
                 RETURN HOME
               </button>
            </div>
         </div>
       )}
 
-      {/* UI OVERLAY (Hidden during Game Over) */}
+      {/* 🎮 UI OVERLAY (Hidden during Game Over) */}
       {!gameOverData && (
         <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 z-10">
-          
           <div className="flex justify-between items-start w-full mt-2">
-            <button 
-              onClick={() => onGameOverRef.current?.(currentScore)} 
-              className="pointer-events-auto bg-black/50 backdrop-blur-md border border-white/10 w-10 h-10 rounded-xl flex items-center justify-center text-white transition-all active:scale-95 shadow-lg"
-            >
+            <button onClick={() => onGameOverRef.current?.(currentScore)} className="pointer-events-auto bg-black/50 backdrop-blur-md border border-white/10 w-10 h-10 rounded-xl flex items-center justify-center text-white transition-all active:scale-95 shadow-lg">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
             </button>
-
             <div className="flex flex-col items-center">
                <div className="text-[42px] font-black text-white drop-shadow-md leading-none">{currentScore}</div>
                <div className="text-sm font-bold text-gray-300 mt-1 drop-shadow-md">Kills: <span className="text-white">{currentKills}</span></div>
             </div>
-
             <div className="pointer-events-auto bg-black/50 backdrop-blur-md border border-white/10 rounded-xl p-2 w-[110px] text-white shadow-lg text-[10px]">
               <div className="flex justify-between items-center mb-1 pb-1 border-b border-white/10 text-yellow-400 font-bold">
-                <span>🏆 Rank</span>
-                <span>Pts</span>
+                <span>🏆 Rank</span><span>Pts</span>
               </div>
               <div className="flex flex-col gap-1 font-bold">
                  <div className="flex justify-between"><span className="text-gray-400 truncate w-12">1. Pgem</span><span className="text-yellow-400">1299</span></div>
@@ -640,7 +707,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
                 </button>
              </div>
           </div>
-          
         </div>
       )}
     </div>
