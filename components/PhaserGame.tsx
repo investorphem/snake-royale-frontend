@@ -14,17 +14,17 @@ class AudioSynth {
     }
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
   }
-  
+
   playHiss() {
     this.init();
     const ctx = this.ctx;
     if (!ctx) return;
-    
+
     const bufferSize = ctx.sampleRate * 0.3; 
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1; 
-    
+
     const noise = ctx.createBufferSource();
     noise.buffer = buffer;
     const bandpass = ctx.createBiquadFilter();
@@ -164,15 +164,16 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     if (!gameRef.current || phaserInstance.current) return;
 
     // ---------------------------------------------------------
-    // 🛠️ AAA HARD-LOCKED SCALING ENGINE 🛠️
+    // 🛠️ AAA FRAME-PERFECT CALIBRATION ENGINE 🛠️
     // ---------------------------------------------------------
-    const HEAD_SCALE = 0.25;  
-    const BODY_SCALE = 0.15;  
-    const VISUAL_OFFSET = Math.PI / 2; 
-    const BASE_SPEED = 280; 
-    const RECORD_DISTANCE = 4; 
-    const SPACING_INDEX = 5;   
-    const COLLISION_RADIUS = 30; 
+    const HEAD_SIZE = 55;  
+    const BODY_SIZE = 42;  
+    const VISUAL_OFFSET = Math.PI / 2; // Perfectly aligns UP-facing images
+    const BASE_SPEED = 240; // Slightly slower base speed prevents jagged edges
+    
+    // Frames recorded per segment spacing. Lower = tighter overlap.
+    const SPACING_FRAMES = 5;   
+    const COLLISION_RADIUS = 28; 
     // ---------------------------------------------------------
 
     const config: Phaser.Types.Core.GameConfig = {
@@ -185,9 +186,11 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
     let head: Phaser.Physics.Arcade.Sprite;
     let snakeBody: Phaser.GameObjects.Sprite[] = [];
-    let pathHistory: { x: number, y: number, moveAngle: number }[] = [];
-    let food: Phaser.Physics.Arcade.Sprite;
     
+    // NEW: Frame-perfect history array guarantees zero jagged corners
+    let pathHistory: { x: number, y: number, angle: number }[] = [];
+    
+    let food: Phaser.Physics.Arcade.Sprite;
     let tongue: Phaser.GameObjects.Sprite;
     let tongueOffset = 0;
     let isFlicking = false;
@@ -196,6 +199,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     let joystickThumb: Phaser.GameObjects.Arc;
     let isJoystickActive = false;
     let targetJoystickAngle = -Math.PI / 2;
+    let currentMoveAngle = -Math.PI / 2;
 
     let score = 0;
     let isEpicFood = false;
@@ -211,7 +215,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     function preload(this: Phaser.Scene) {
       this.load.image('arena_default', '/assets/arena_default.png');
       this.load.image('classic_head', '/assets/classic_head.png');
-      this.load.image('classic_body', '/assets/classic_body.png'); 
       this.load.image('food_normal', '/assets/food_normal.png');
       this.load.image('food_epic', '/assets/food_epic.png');
     }
@@ -222,6 +225,22 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       const grid = this.add.tileSprite(1500, 1500, 3000, 3000, 'arena_default').setDepth(0);
       grid.setAlpha(0.4);
 
+      // ========================================================
+      // 🟢 THE VIDEO-MATCHING GLOSSY BODY GENERATOR
+      // Matches the exact lime-green segmented look from your video
+      // ========================================================
+      const radius = 24;
+      const bgfx = this.make.graphics({ x: 0, y: 0 }, false);
+      bgfx.fillStyle(0x166534, 1); // Dark green outer stroke
+      bgfx.fillCircle(radius, radius, radius);
+      bgfx.fillStyle(0x4ade80, 1); // Bright lime-green body
+      bgfx.fillCircle(radius, radius, radius - 3);
+      bgfx.fillStyle(0x86efac, 0.9); // Glossy top-left specular highlight
+      bgfx.fillCircle(radius - 6, radius - 6, radius - 14);
+      bgfx.generateTexture('video_body', radius * 2, radius * 2);
+      bgfx.destroy();
+
+      // Procedural Forked Tongue
       const tgfx = this.make.graphics({ x: 0, y: 0 }, false);
       tgfx.lineStyle(3, 0xdc2626, 1); 
       tgfx.beginPath();
@@ -231,28 +250,30 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       tgfx.generateTexture('premium_tongue', 30, 40);
       tgfx.destroy();
 
-      // HEAD
       head = this.physics.add.sprite(1500, 1500, 'classic_head');
       head.setDepth(1000); 
-      head.setScale(HEAD_SCALE); 
+      head.setDisplaySize(HEAD_SIZE, HEAD_SIZE); 
       head.setCollideWorldBounds(true);
       head.setData('moveAngle', -Math.PI / 2); 
-
-      // (REMOVED INVALID SETDROPSHADOW LINE TO FIX VERCEL BUILD)
 
       tongue = this.add.sprite(1500, 1500, 'premium_tongue');
       tongue.setDepth(999); 
       tongue.setVisible(false);
 
-      for (let i = 0; i <= 60 * SPACING_INDEX + 10; i++) {
-        pathHistory.push({ x: 1500, y: 1500 + (i * RECORD_DISTANCE), moveAngle: -Math.PI / 2 });
+      // Pre-fill path history so body spawns behind head immediately
+      for (let i = 0; i <= 200; i++) {
+        pathHistory.push({ 
+            x: 1500, 
+            y: 1500 + (i * 3), 
+            angle: -Math.PI / 2 
+        });
       }
 
-      // BODY
-      for(let i=0; i<25; i++) {
-        const bodyPart = this.add.sprite(1500, 1500, 'classic_body');
+      // Initialize initial 15 body segments using the Video-Match Body
+      for(let i=0; i<15; i++) {
+        const bodyPart = this.add.sprite(1500, 1500, 'video_body');
         bodyPart.setDepth(998 - i);
-        bodyPart.setScale(BODY_SCALE); 
+        bodyPart.setDisplaySize(BODY_SIZE, BODY_SIZE); 
         snakeBody.push(bodyPart);
       }
 
@@ -278,25 +299,25 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         pendingGrowth = 0;
         pathHistory = [];
         tongueOffset = 0;
-        
+
         head.setPosition(1500, 1500);
-        head.setData('moveAngle', -Math.PI / 2);
+        currentMoveAngle = -Math.PI / 2;
         targetJoystickAngle = -Math.PI / 2;
         head.setVisible(true);
 
-        for (let i = 0; i <= 60 * SPACING_INDEX + 10; i++) {
-          pathHistory.push({ x: 1500, y: 1500 + (i * RECORD_DISTANCE), moveAngle: -Math.PI / 2 });
+        for (let i = 0; i <= 200; i++) {
+          pathHistory.push({ x: 1500, y: 1500 + (i * 3), angle: -Math.PI / 2 });
         }
 
         snakeBody.forEach(s => s.destroy());
         snakeBody = [];
-        for(let i=0; i<25; i++) {
-          const bodyPart = this.add.sprite(1500, 1500, 'classic_body');
+        for(let i=0; i<15; i++) {
+          const bodyPart = this.add.sprite(1500, 1500, 'video_body');
           bodyPart.setDepth(998 - i);
-          bodyPart.setScale(BODY_SCALE); 
+          bodyPart.setDisplaySize(BODY_SIZE, BODY_SIZE); 
           snakeBody.push(bodyPart);
         }
-        
+
         window.dispatchEvent(new CustomEvent('updatePhaserScore', { detail: score }));
         spawnFood(this);
       });
@@ -331,7 +352,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         const popup = this.add.text(head.x, head.y - 60, popupText, {
           fontSize: '32px', fontFamily: 'Arial', color: '#ffffff', fontStyle: '900', stroke: '#000000', strokeThickness: 6
         }).setOrigin(0.5).setDepth(3000);
-        
+
         this.tweens.add({ targets: popup, y: popup.y - 100, alpha: 0, duration: 1500, onComplete: () => popup.destroy() });
       };
 
@@ -375,7 +396,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       scene.tweens.add({
         targets: { offset: 0 },
-        offset: head.displayWidth * 0.4, 
+        offset: HEAD_SIZE * 0.5, 
         duration: 150,
         yoyo: true,
         onUpdate: (tween) => { tongueOffset = Number(tween.getValue()) || 0; },
@@ -390,17 +411,24 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     function update(this: Phaser.Scene, time: number, delta: number) {
       if (!head || !head.body || isDead) return;
 
-      let currentMoveAngle = head.getData('moveAngle');
-
+      // 🟢 ULTRA-SMOOTH ARC TURNING (Fixes the 90-degree jagged bug!)
       if (isJoystickActive) {
-        currentMoveAngle = Phaser.Math.Angle.RotateTo(currentMoveAngle, targetJoystickAngle, 0.12 * (delta / 16));
-        head.setData('moveAngle', currentMoveAngle);
+        let diff = Phaser.Math.Angle.Wrap(targetJoystickAngle - currentMoveAngle);
+        // Heavy dampening here prevents sharp turns, forcing gorgeous wide arcs
+        currentMoveAngle += diff * 0.08; 
       }
       
       this.physics.velocityFromRotation(currentMoveAngle, BASE_SPEED * powerUpSpeedMult, (head.body as Phaser.Physics.Arcade.Body).velocity);
       head.rotation = currentMoveAngle + VISUAL_OFFSET;
 
-      const snoutDist = head.displayWidth * 0.35; 
+      // 🟢 FRAME-PERFECT HISTORY (Every single frame is recorded for the body to perfectly follow)
+      pathHistory.unshift({ x: head.x, y: head.y, angle: currentMoveAngle });
+      // Keep array size capped to save memory
+      if (pathHistory.length > snakeBody.length * SPACING_FRAMES + 20) {
+        pathHistory.pop();
+      }
+
+      const snoutDist = HEAD_SIZE * 0.45; 
       const totalDist = snoutDist + tongueOffset;
       tongue.setPosition(
           head.x + Math.cos(currentMoveAngle) * totalDist,
@@ -423,43 +451,33 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       if (foodDistance < 30 && !isEating) eatFood(this);
 
-      const lastPos = pathHistory[0];
-      const distToLast = Phaser.Math.Distance.Between(head.x, head.y, lastPos.x, lastPos.y);
-
-      if (distToLast >= RECORD_DISTANCE) {
-        const steps = Math.floor(distToLast / RECORD_DISTANCE);
-        for (let s = 1; s <= steps; s++) {
-          const t = s / steps;
-          const interpX = Phaser.Math.Interpolation.Linear([lastPos.x, head.x], t);
-          const interpY = Phaser.Math.Interpolation.Linear([lastPos.y, head.y], t);
-          
-          pathHistory.unshift({ x: interpX, y: interpY, moveAngle: currentMoveAngle });
-          if (pathHistory.length > snakeBody.length * SPACING_INDEX + 15) {
-            pathHistory.pop();
-          }
-        }
-      }
-
-      for (let i = 0; i < snakeBody.length; i++) {
-        const historyIndex = (i + 1) * SPACING_INDEX;
+      // 🟢 FRAME-PERFECT BODY POSITIONING
+      const totalSegments = snakeBody.length;
+      for (let i = 0; i < totalSegments; i++) {
+        // Find the exact frame in history that this segment belongs to
+        const historyIndex = (i + 1) * SPACING_FRAMES;
         const targetPos = pathHistory[historyIndex];
 
         if (targetPos) {
           snakeBody[i].setPosition(targetPos.x, targetPos.y);
-          
-          const frontSegment = i === 0 ? head : snakeBody[i - 1];
-          const angleToFront = Phaser.Math.Angle.Between(snakeBody[i].x, snakeBody[i].y, frontSegment.x, frontSegment.y);
-          snakeBody[i].rotation = angleToFront + VISUAL_OFFSET; 
+          snakeBody[i].rotation = targetPos.angle + VISUAL_OFFSET; 
 
-          const taperStart = snakeBody.length - 15;
+          // AAA Tail Tapering
+          const taperStart = totalSegments - 8;
+          let currentBodySize = BODY_SIZE;
+
           if (i > taperStart) {
-            const step = (BODY_SCALE - 0.05) / 15;
-            const scaleDown = BODY_SCALE - ((i - taperStart) * step);
-            snakeBody[i].setScale(Math.max(scaleDown, 0.05)); 
-          } else {
-            snakeBody[i].setScale(BODY_SCALE); 
+            const ratio = (i - taperStart) / 8;
+            currentBodySize = BODY_SIZE - (ratio * (BODY_SIZE - 10)); 
           }
 
+          if (powerUpSpeedMult > 1) {
+             snakeBody[i].setDisplaySize(currentBodySize * 0.85, currentBodySize * 1.15); // Stretch
+          } else {
+             snakeBody[i].setDisplaySize(currentBodySize, currentBodySize);
+          }
+
+          // 💀 Accurate Death Physics (Wait until segment 15 so neck doesn't kill you)
           if (i > 15 && !isDead && !isShielded) {
             const bodyDist = Phaser.Math.Distance.Between(head.x, head.y, snakeBody[i].x, snakeBody[i].y);
             if (bodyDist < COLLISION_RADIUS) {
@@ -471,33 +489,26 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       if (isEpicFood) {
         foodTimer -= delta;
-        food.setScale(0.20 + Math.sin(time / 150) * 0.03);
+        food.setDisplaySize(40 + Math.sin(time / 150) * 8, 40 + Math.sin(time / 150) * 8);
         if (foodTimer < 1500) food.alpha = Math.floor(time / 100) % 2 === 0 ? 0.3 : 1;
         if (foodTimer <= 0) spawnFood(this); 
       }
 
-      if (pendingGrowth > 0 && time % 60 < 16) {
+      // Smooth Segment Spawning
+      if (pendingGrowth > 0 && time % 5 == 0) {
         const lastSegment = snakeBody[snakeBody.length - 1];
-        
-        const newTail = this.add.sprite(lastSegment.x, lastSegment.y, 'classic_body');
+        const newTail = this.add.sprite(lastSegment.x, lastSegment.y, 'video_body');
         newTail.setDepth(lastSegment.depth - 1);
-        newTail.setScale(BODY_SCALE);
+        newTail.setDisplaySize(BODY_SIZE, BODY_SIZE);
         if (isShielded) newTail.setTint(0x60a5fa);
         snakeBody.push(newTail);
-
-        for (let j = 0; j < SPACING_INDEX; j++) {
-          const lastHistory = pathHistory[pathHistory.length - 1];
-          if (lastHistory) pathHistory.push({ ...lastHistory });
-        }
         pendingGrowth--;
       }
 
       if (head.x <= 20 || head.x >= 2980 || head.y <= 20 || head.y >= 2980) {
         if (!isShielded) triggerDeath(this);
         else {
-          const bounceAngle = head.getData('moveAngle') + Math.PI;
-          head.setData('moveAngle', bounceAngle);
-          targetJoystickAngle = bounceAngle;
+          targetJoystickAngle = currentMoveAngle + Math.PI;
         }
       }
     }
@@ -512,13 +523,13 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         food.setTexture('food_epic');
         foodTimer = 5000;
         food.alpha = 1;
-        food.setScale(0.25);
-        scene.tweens.add({ targets: food, scale: 0.30, duration: 400, ease: 'Back.out' });
+        food.setDisplaySize(45, 45);
+        scene.tweens.add({ targets: food, scale: 1.2, duration: 400, ease: 'Back.out' });
         sfx.playEpicSpawn();
       } else {
         food.setTexture('food_normal');
         food.alpha = 1;
-        food.setScale(0.18); 
+        food.setDisplaySize(28, 28); 
       }
     }
 
@@ -537,7 +548,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         targets: popup, y: popup.y - 120, alpha: 0, duration: 1000, ease: 'Cubic.out', onComplete: () => popup.destroy()
       });
 
-      scene.tweens.add({ targets: head, scale: HEAD_SCALE * 1.3, duration: 80, yoyo: true });
+      scene.tweens.add({ targets: head, scaleX: 0.30, scaleY: 0.20, duration: 80, yoyo: true });
 
       scene.add.particles(food.x, food.y, 'foodSpark', {
         speed: { min: 80, max: 250 }, lifespan: 400, quantity: 15, scale: { start: 0.5, end: 0 }
@@ -546,7 +557,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       scene.tweens.add({
         targets: food, scale: 0, alpha: 0, duration: 100,
         onComplete: () => {
-          pendingGrowth += isEpicFood ? 8 : 4;
+          pendingGrowth += isEpicFood ? 12 : 4; 
           score += points;
           window.dispatchEvent(new CustomEvent('updatePhaserScore', { detail: score }));
           spawnFood(scene);
