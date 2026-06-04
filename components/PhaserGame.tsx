@@ -17,54 +17,60 @@ class AudioSynth {
   
   playHiss() {
     this.init();
-    if (!this.ctx) return;
-    const bufferSize = this.ctx.sampleRate * 0.3; 
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const ctx = this.ctx;
+    if (!ctx) return;
+    
+    const bufferSize = ctx.sampleRate * 0.3; 
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1; 
     
-    const noise = this.ctx.createBufferSource();
+    const noise = ctx.createBufferSource();
     noise.buffer = buffer;
-    const bandpass = this.ctx.createBiquadFilter();
+    const bandpass = ctx.createBiquadFilter();
     bandpass.type = 'bandpass';
     bandpass.frequency.value = 4000; 
     bandpass.Q.value = 1.0;
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.15, this.ctx.currentTime + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
 
     noise.connect(bandpass);
     bandpass.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(ctx.destination);
     noise.start();
   }
 
   playEat() {
     this.init();
-    if (!this.ctx) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const ctx = this.ctx;
+    if (!ctx) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(587.33, this.ctx.currentTime); 
-    osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.08); 
-    gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime); 
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.08); 
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(ctx.destination);
     osc.start();
-    osc.stop(this.ctx.currentTime + 0.1);
+    osc.stop(ctx.currentTime + 0.1);
   }
 
   playEpicSpawn() {
     this.init();
-    if (!this.ctx) return;
-    const ctx = this.ctx; 
+    const ctx = this.ctx;
+    if (!ctx) return;
+
     const now = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.50]; 
     notes.forEach((freq, index) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+      // FIX: Uses the local 'ctx' constant so TypeScript knows it is never null inside the loop!
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, now + (index * 0.04));
       gain.gain.setValueAtTime(0.15, now + (index * 0.04));
@@ -78,34 +84,38 @@ class AudioSynth {
 
   playDie() {
     this.init();
-    if (!this.ctx) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const ctx = this.ctx;
+    if (!ctx) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(150, this.ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(40, this.ctx.currentTime + 0.4); 
-    gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.4);
+    osc.frequency.setValueAtTime(150, ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(40, ctx.currentTime + 0.4); 
+    gain.gain.setValueAtTime(0.4, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(ctx.destination);
     osc.start();
-    osc.stop(this.ctx.currentTime + 0.4);
+    osc.stop(ctx.currentTime + 0.4);
   }
 
   playPowerup() {
     this.init();
-    if (!this.ctx) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const ctx = this.ctx;
+    if (!ctx) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     osc.type = 'square';
-    osc.frequency.setValueAtTime(400, this.ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(1200, this.ctx.currentTime + 0.3);
-    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+    osc.frequency.setValueAtTime(400, ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
     osc.connect(gain);
-    gain.connect(this.ctx.destination);
+    gain.connect(ctx.destination);
     osc.start();
-    osc.stop(this.ctx.currentTime + 0.3);
+    osc.stop(ctx.currentTime + 0.3);
   }
 }
 const sfx = new AudioSynth();
@@ -126,6 +136,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
   const [currentScore, setCurrentScore] = useState(0);
   const [currentKills, setCurrentKills] = useState(0);
   const [inventoryBalances, setInventoryBalances] = useState({ speed: 3, shield: 2, magnet: 3 });
+  
   const [gameOverData, setGameOverData] = useState<{score: number, kills: number} | null>(null);
 
   useEffect(() => { onGameOverRef.current = onGameOver; }, [onGameOver]);
@@ -165,11 +176,13 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     // ---------------------------------------------------------
     const HEAD_SCALE = 0.22;  
     const BODY_SCALE = 0.20; 
-    const VISUAL_OFFSET = Math.PI / 2; // Matches Top-Down Head Perfectly
+    
+    const VISUAL_OFFSET = Math.PI / 2; 
     
     const BASE_SPEED = 280; 
-    const RECORD_DISTANCE = 3; 
-    const SPACING_INDEX = 5; 
+    const RECORD_DISTANCE = 4; 
+    const SPACING_INDEX = 4;   
+    
     const COLLISION_RADIUS = 80; 
     // ---------------------------------------------------------
 
@@ -227,7 +240,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       const grid = this.add.tileSprite(1500, 1500, 3000, 3000, 'arena_default').setDepth(0);
       grid.setAlpha(0.4);
 
-      // Procedural Forked Tongue
       const tgfx = this.make.graphics({ x: 0, y: 0 }, false);
       tgfx.lineStyle(3, 0xdc2626, 1); 
       tgfx.beginPath();
@@ -267,15 +279,14 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       gfx.generateTexture('foodSpark', 8, 8);
       gfx.destroy();
 
-      // 🚀 NEW: Speed Boost Particle Trail
       trailEmitter = this.add.particles(0, 0, 'foodSpark', {
         scale: { start: 0.8, end: 0 },
         alpha: { start: 0.4, end: 0 },
         lifespan: 500,
-        tint: 0x4ade80, // Neon Green
+        tint: 0x4ade80, 
         blendMode: 'ADD'
       });
-      trailEmitter.stop(); // Only emit when boosting
+      trailEmitter.stop(); 
 
       spawnFood(this);
 
@@ -369,8 +380,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
           const dist = Math.min(Phaser.Math.Distance.Between(joystickBase.x, joystickBase.y, pointer.x, pointer.y), 45);
 
           joystickThumb.setPosition(joystickBase.x + Math.cos(angle) * dist, joystickBase.y + Math.sin(angle) * dist);
-          
-          // Vector.Lerp equivalent for smooth turning arcs
           targetJoystickAngle = angle; 
         } 
       });
@@ -407,7 +416,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       let currentMoveAngle = head.getData('moveAngle');
 
-      // 🚀 SMOOTH CURVING PHYSICS
       if (isJoystickActive) {
         currentMoveAngle = Phaser.Math.Angle.RotateTo(currentMoveAngle, targetJoystickAngle, 0.12 * (delta / 16));
         head.setData('moveAngle', currentMoveAngle);
@@ -416,17 +424,12 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       this.physics.velocityFromRotation(currentMoveAngle, BASE_SPEED * powerUpSpeedMult, (head.body as Phaser.Physics.Arcade.Body).velocity);
       head.rotation = currentMoveAngle + VISUAL_OFFSET;
 
-      // 🚀 SQUASH & STRETCH AND PARTICLE TRAIL (When Speed Boost is Active)
       if (!isEating) {
         if (powerUpSpeedMult > 1) {
-          // Stretches length (Y) and thins width (X) to simulate high-speed tension
           head.setScale(HEAD_SCALE * 0.85, HEAD_SCALE * 1.15); 
-          
-          // Emit neon trail at the tip of the tail
           const tail = snakeBody[snakeBody.length - 1];
           if (tail) trailEmitter.emitParticleAt(tail.x, tail.y);
         } else {
-          // Snap back to normal bouncy state
           head.setScale(HEAD_SCALE);
         }
       }
@@ -482,13 +485,11 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
           const angleToFront = Phaser.Math.Angle.Between(snakeBody[i].x, snakeBody[i].y, frontSegment.x, frontSegment.y);
           snakeBody[i].rotation = angleToFront + VISUAL_OFFSET; 
 
-          // Seamless Tail Tapering
           const taperStart = snakeBody.length - 15;
           if (i > taperStart) {
             const step = (BODY_SCALE - 0.05) / 15;
             const scaleDown = BODY_SCALE - ((i - taperStart) * step);
             
-            // Squash & Stretch body segments if boosting
             if (powerUpSpeedMult > 1) {
               snakeBody[i].setScale(Math.max(scaleDown, 0.05) * 0.85, Math.max(scaleDown, 0.05) * 1.15);
             } else {
@@ -579,7 +580,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         targets: popup, y: popup.y - 120, alpha: 0, duration: 1000, ease: 'Cubic.out', onComplete: () => popup.destroy()
       });
 
-      // Squash and Stretch "Gulp"
       scene.tweens.add({ targets: head, scaleX: HEAD_SCALE * 1.3, scaleY: HEAD_SCALE * 0.9, duration: 80, yoyo: true });
 
       scene.add.particles(food.x, food.y, 'foodSpark', {
