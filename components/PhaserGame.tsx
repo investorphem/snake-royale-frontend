@@ -79,13 +79,16 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
   const phaserInstance = useRef<Phaser.Game | null>(null);
   const onGameOverRef = useRef(onGameOver);
 
-  // Sync Score to React UI
+  // Sync Score, Kills, and Inventory to React UI
   const [currentScore, setCurrentScore] = useState(0);
+  const [currentKills, setCurrentKills] = useState(0);
+  
+  // Mock Inventory Balances (You can hook this up to your database later)
+  const [inventoryBalances, setInventoryBalances] = useState({ speed: 2, shield: 1, magnet: 0 });
 
   useEffect(() => { onGameOverRef.current = onGameOver; }, [onGameOver]);
 
   useEffect(() => {
-    // Custom Event Listener to grab score from Phaser without unmounting
     const handleScoreUpdate = (e: any) => setCurrentScore(e.detail);
     window.addEventListener('updatePhaserScore', handleScoreUpdate);
     return () => window.removeEventListener('updatePhaserScore', handleScoreUpdate);
@@ -97,18 +100,17 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     // ---------------------------------------------------------
     // 🛠️ PREMIUM SNAKE TUNING & CALIBRATION 🛠️
     // ---------------------------------------------------------
-    const HEAD_SCALE = 0.25;  
-    const BODY_SCALE = 0.22;  
-    const VISUAL_OFFSET = Math.PI; 
+    const HEAD_SCALE = 0.22;  
+    const BODY_SCALE = 0.19;  
+    const VISUAL_OFFSET = Math.PI; // Fixes upside down head
     
     const SPEED = 280; 
-    const RECORD_DISTANCE = 2; 
-    const SPACING_INDEX = 10;  
+    const RECORD_DISTANCE = 2; // Ultra tight recording
+    const SPACING_INDEX = 6;   // Tighter spacing = Seamless Tube!
     // ---------------------------------------------------------
 
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
-      // FULL SCREEN DEVICE SCALING
       scale: {
         mode: Phaser.Scale.RESIZE,
         parent: gameRef.current,
@@ -125,7 +127,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     let pathHistory: { x: number, y: number, moveAngle: number }[] = [];
     let food: Phaser.Physics.Arcade.Sprite;
     
-    // Joystick Variables
     let joystickBase: Phaser.GameObjects.Arc;
     let joystickThumb: Phaser.GameObjects.Arc;
     let isJoystickActive = false;
@@ -135,25 +136,22 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     let foodTimer = 0;
     let pendingGrowth = 0;
     let isEating = false;
+    let isDead = false;
 
     function preload(this: Phaser.Scene) {
-      // Load all premium assets into the Phaser engine
       this.load.image('arena_default', '/assets/arena_default.png');
       this.load.image('classic_head', '/assets/classic_head.png');
       this.load.image('classic_body', '/assets/classic_body.png');
       this.load.image('classic_tail', '/assets/classic_tail.png'); 
       this.load.image('food_normal', '/assets/food_normal.png');
       this.load.image('food_epic', '/assets/food_epic.png');
-      this.load.image('food_blue', '/assets/food_blue.png');
-      this.load.image('food_purple', '/assets/food_purple.png');
-      this.load.image('food_red', '/assets/food_red.png');
     }
 
     function create(this: Phaser.Scene) {
       this.physics.world.setBounds(0, 0, 3000, 3000);
 
       const grid = this.add.tileSprite(1500, 1500, 3000, 3000, 'arena_default').setDepth(0);
-      grid.setAlpha(0.3);
+      grid.setAlpha(0.4);
 
       head = this.physics.add.sprite(1500, 1500, 'classic_head');
       head.setDepth(1000); 
@@ -161,19 +159,19 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       head.setCollideWorldBounds(true);
       head.setData('moveAngle', -Math.PI / 2); 
 
-      for (let i = 0; i <= 25 * SPACING_INDEX + 10; i++) {
+      // Pre-fill history to prevent bunching
+      for (let i = 0; i <= 35 * SPACING_INDEX + 10; i++) {
         pathHistory.push({ x: 1500, y: 1500 + (i * RECORD_DISTANCE), moveAngle: -Math.PI / 2 });
       }
 
-      for(let i=0; i<20; i++) {
-        const texture = i === 19 ? 'classic_tail' : 'classic_body';
+      for(let i=0; i<30; i++) {
+        const texture = i === 29 ? 'classic_tail' : 'classic_body';
         const bodyPart = this.add.sprite(1500, 1500, texture);
         bodyPart.setDepth(999 - i);
         bodyPart.setScale(BODY_SCALE); 
         snakeBody.push(bodyPart);
       }
 
-      // Initial food spawn uses the premium assets loaded in preload()
       food = this.physics.add.sprite(0, 0, 'food_normal');
       food.setDepth(5);
 
@@ -194,14 +192,14 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       // =====================================
       // ON-SCREEN REFLECTIVE VIRTUAL JOYSTICK
       // =====================================
-      this.input.addPointer(2); // Enable multi-touch
+      this.input.addPointer(2); 
 
-      joystickBase = this.add.circle(0, 0, 60, 0xffffff, 0.1).setScrollFactor(0).setDepth(3000).setVisible(false);
-      joystickThumb = this.add.circle(0, 0, 30, 0xffffff, 0.3).setScrollFactor(0).setDepth(3000).setVisible(false);
+      joystickBase = this.add.circle(0, 0, 70, 0xffffff, 0.15).setScrollFactor(0).setDepth(3000).setVisible(false);
+      joystickThumb = this.add.circle(0, 0, 35, 0xffffff, 0.4).setScrollFactor(0).setDepth(3000).setVisible(false);
 
       this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => { 
-        // Only trigger joystick on the left 70% of the screen (leaves right side for buttons)
-        if (pointer.x > this.cameras.main.width * 0.7) return; 
+        if (pointer.x > this.cameras.main.width * 0.6) return; // Leave right side for powerups
+        if (isDead) return;
         
         isJoystickActive = true;
         joystickBase.setPosition(pointer.x, pointer.y).setVisible(true);
@@ -209,9 +207,9 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       });
 
       this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => { 
-        if (isJoystickActive && pointer.isDown) { 
+        if (isJoystickActive && pointer.isDown && !isDead) { 
           const angle = Phaser.Math.Angle.Between(joystickBase.x, joystickBase.y, pointer.x, pointer.y);
-          const dist = Math.min(Phaser.Math.Distance.Between(joystickBase.x, joystickBase.y, pointer.x, pointer.y), 40);
+          const dist = Math.min(Phaser.Math.Distance.Between(joystickBase.x, joystickBase.y, pointer.x, pointer.y), 45);
 
           joystickThumb.setPosition(
             joystickBase.x + Math.cos(angle) * dist,
@@ -230,7 +228,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     }
 
     function update(this: Phaser.Scene, time: number, delta: number) {
-      if (!head || !head.body) return;
+      if (!head || !head.body || isDead) return;
 
       let currentMoveAngle = head.getData('moveAngle');
       this.physics.velocityFromRotation(currentMoveAngle, SPEED, (head.body as Phaser.Physics.Arcade.Body).velocity);
@@ -239,16 +237,15 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       const foodDistance = Phaser.Math.Distance.Between(head.x, head.y, food.x, food.y);
 
-      if (foodDistance < 140 && !isEating) {
+      if (foodDistance < 150 && !isEating) {
         const pullAngle = Phaser.Math.Angle.Between(food.x, food.y, head.x, head.y);
-        food.x += Math.cos(pullAngle) * 8;
-        food.y += Math.sin(pullAngle) * 8;
+        food.x += Math.cos(pullAngle) * 9;
+        food.y += Math.sin(pullAngle) * 9;
       }
 
-      if (foodDistance < 28 && !isEating) {
-        eatFood(this);
-      }
+      if (foodDistance < 30 && !isEating) eatFood(this);
 
+      // Interpolation Physics (Prevents String of Beads)
       const lastPos = pathHistory[0];
       const distToLast = Phaser.Math.Distance.Between(head.x, head.y, lastPos.x, lastPos.y);
 
@@ -266,6 +263,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         }
       }
 
+      // Apply Body Positions & Collision
       for (let i = 0; i < snakeBody.length; i++) {
         const historyIndex = (i + 1) * SPACING_INDEX;
         const targetPos = pathHistory[historyIndex];
@@ -285,6 +283,17 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
           } else {
             snakeBody[i].setScale(BODY_SCALE); 
           }
+
+          // =====================================
+          // 💀 SELF COLLISION (DEATH MECHANISM)
+          // =====================================
+          // Don't check the first 25 segments (the neck), or the snake will instantly die!
+          if (i > 25 && !isDead) {
+            const bodyDist = Phaser.Math.Distance.Between(head.x, head.y, snakeBody[i].x, snakeBody[i].y);
+            if (bodyDist < 18) {
+              triggerDeath(this);
+            }
+          }
         }
       }
 
@@ -294,6 +303,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         if (foodTimer <= 0) spawnFood(this); 
       }
 
+      // Growth Queue
       if (pendingGrowth > 0 && time % 60 < 16) {
         const lastSegment = snakeBody[snakeBody.length - 1];
         lastSegment.setTexture('classic_body');
@@ -310,16 +320,18 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         pendingGrowth--;
       }
 
-      if (head.x <= 10 || head.x >= 2990 || head.y <= 10 || head.y >= 2990) triggerDeath(this);
+      // Wall Collision Death
+      if (head.x <= 20 || head.x >= 2980 || head.y <= 20 || head.y >= 2980) {
+        triggerDeath(this);
+      }
     }
 
     function spawnFood(scene: Phaser.Scene) {
-      const randomX = Phaser.Math.Between(150, 2850);
-      const randomY = Phaser.Math.Between(150, 2850);
+      const randomX = Phaser.Math.Between(200, 2800);
+      const randomY = Phaser.Math.Between(200, 2800);
       food.setPosition(randomX, randomY);
       isEpicFood = Math.random() < 0.2;
 
-      // Applying premium food images dynamically
       if (isEpicFood) {
         food.setTexture('food_epic');
         foodTimer = 5000;
@@ -328,66 +340,61 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         scene.tweens.add({ targets: food, scale: 0.25, duration: 400, ease: 'Back.out' });
         sfx.playEpicSpawn();
       } else {
-        const standardFoods = ['food_normal', 'food_blue', 'food_purple', 'food_red'];
-        food.setTexture(Phaser.Math.RND.pick(standardFoods));
+        food.setTexture('food_normal');
         food.alpha = 1;
         food.setScale(0.2); 
       }
     }
 
     function eatFood(scene: Phaser.Scene) {
-      if (isEating) return;
+      if (isEating || isDead) return;
       isEating = true;
       sfx.playEat();
 
       const points = isEpicFood ? 45 : 15;
 
-      // 💥 PREMIUM FLOATING POP-UP SCORE 💥
+      // Floating Score Anim
       const popup = scene.add.text(head.x, head.y - 40, `+${points}`, {
-        fontSize: '38px',
-        fontFamily: 'Arial',
+        fontSize: '44px',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
         color: '#4ade80',
         fontStyle: '900',
         stroke: '#000000',
-        strokeThickness: 6
+        strokeThickness: 8
       }).setOrigin(0.5).setDepth(2500);
 
       scene.tweens.add({
         targets: popup,
-        y: popup.y - 100, // Float upwards
+        y: popup.y - 120, 
         alpha: 0,
-        duration: 900,
+        duration: 1000,
         ease: 'Cubic.out',
         onComplete: () => popup.destroy()
       });
 
       scene.tweens.add({
         targets: head,
-        scale: HEAD_SCALE * 1.25,
+        scale: HEAD_SCALE * 1.3,
         duration: 80,
         yoyo: true
       });
 
       scene.add.particles(food.x, food.y, 'foodSpark', {
-        speed: { min: 60, max: 220 },
-        lifespan: 350,
-        quantity: 12,
-        scale: { start: 0.4, end: 0 }
+        speed: { min: 80, max: 250 },
+        lifespan: 400,
+        quantity: 15,
+        scale: { start: 0.5, end: 0 }
       });
 
       scene.tweens.add({
         targets: food,
         scale: 0,
         alpha: 0,
-        duration: 120,
-        ease: 'Back.in',
+        duration: 100,
         onComplete: () => {
-          pendingGrowth += isEpicFood ? 12 : 6;
-
+          pendingGrowth += isEpicFood ? 8 : 4;
           score += points;
-          // Send updated score to React UI
           window.dispatchEvent(new CustomEvent('updatePhaserScore', { detail: score }));
-
           spawnFood(scene);
           isEating = false;
         }
@@ -395,23 +402,28 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     }
 
     function triggerDeath(scene: Phaser.Scene) {
+      if (isDead) return;
+      isDead = true;
       sfx.playDie();
+      
+      head.setVelocity(0, 0); // Stop moving instantly
+      scene.cameras.main.shake(500, 0.04);
+      
       if (score > 0) onGameOverRef.current?.(score);
-      scene.cameras.main.shake(400, 0.03);
-      scene.time.delayedCall(400, () => {
+
+      scene.time.delayedCall(800, () => {
         for (let i = 0; i < snakeBody.length; i++) snakeBody[i].destroy();
         snakeBody = [];
         pathHistory = [];
         head.setPosition(1500, 1500);
         head.setData('moveAngle', -Math.PI / 2);
-        head.setVelocity(0, 0);
 
-        for (let i = 0; i <= 25 * SPACING_INDEX + 10; i++) {
+        for (let i = 0; i <= 35 * SPACING_INDEX + 10; i++) {
           pathHistory.push({ x: 1500, y: 1500 + (i * RECORD_DISTANCE), moveAngle: -Math.PI / 2 });
         }
 
-        for(let i=0; i<20; i++) {
-          const texture = i === 19 ? 'classic_tail' : 'classic_body';
+        for(let i=0; i<30; i++) {
+          const texture = i === 29 ? 'classic_tail' : 'classic_body';
           const bodyPart = scene.add.sprite(1500, 1500, texture);
           bodyPart.setDepth(999 - i);
           bodyPart.setScale(BODY_SCALE); 
@@ -420,6 +432,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         score = 0;
         window.dispatchEvent(new CustomEvent('updatePhaserScore', { detail: score }));
         spawnFood(scene);
+        isDead = false;
       });
     }
 
@@ -432,72 +445,74 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     };
   }, []);
 
-  // =========================================================
-  // 🎨 REACT UI OVERLAY (Perfectly matches the reference video)
-  // =========================================================
   return (
-    // FULL SCREEN BREAKOUT CONTAINER
     <div className="fixed inset-0 w-full h-[100dvh] bg-[#06090E] z-[9999] overflow-hidden select-none touch-none">
       
       {/* Phaser Canvas */}
       <div ref={gameRef} className="absolute inset-0 w-full h-full" />
 
-      {/* UI OVERLAY (Pointer-events-none so touches pass through to the game joystick) */}
-      <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 sm:p-8 z-10">
+      {/* UI OVERLAY */}
+      <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 z-10">
         
         {/* TOP ROW */}
-        <div className="flex justify-between items-start w-full">
+        <div className="flex justify-between items-start w-full mt-2">
           
-          {/* TOP LEFT: Back Arrow */}
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => onGameOverRef.current?.(currentScore)} 
-              className="pointer-events-auto bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/10 w-12 h-12 rounded-2xl flex items-center justify-center text-white transition-all active:scale-95 shadow-lg"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-            </button>
+          {/* Back Arrow */}
+          <button 
+            onClick={() => onGameOverRef.current?.(currentScore)} 
+            className="pointer-events-auto bg-black/50 backdrop-blur-md border border-white/10 w-10 h-10 rounded-xl flex items-center justify-center text-white transition-all active:scale-95 shadow-lg"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+
+          {/* Center Score & Dynamic Kills */}
+          <div className="flex flex-col items-center">
+             <div className="text-[42px] font-black text-white drop-shadow-md leading-none">{currentScore}</div>
+             <div className="text-sm font-bold text-gray-300 mt-1 drop-shadow-md">Kills: <span className="text-white">{currentKills}</span></div>
           </div>
 
-          {/* TOP CENTER: Score & Kills */}
-          <div className="flex flex-col items-center mt-2">
-             <div className="w-32 h-2.5 bg-black/50 rounded-full mb-2 overflow-hidden border border-white/10">
-                <div className="h-full bg-[#4ade80] w-[30%] shadow-[0_0_10px_#4ade80]"></div>
-             </div>
-             <div className="text-5xl font-black text-white drop-shadow-md leading-none">{currentScore}</div>
-             <div className="text-base font-bold text-white mt-1">Kills: <span className="text-gray-300">3</span></div>
-          </div>
-
-          {/* TOP RIGHT: Leaderboard */}
-          <div className="pointer-events-auto bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-3 w-36 text-white shadow-lg hidden sm:block">
-            <div className="flex justify-between items-center mb-1 pb-1 border-b border-white/10 text-yellow-400 font-bold text-xs">
+          {/* MiniPay Visible Leaderboard */}
+          <div className="pointer-events-auto bg-black/50 backdrop-blur-md border border-white/10 rounded-xl p-2 w-[110px] text-white shadow-lg text-[10px]">
+            <div className="flex justify-between items-center mb-1 pb-1 border-b border-white/10 text-yellow-400 font-bold">
               <span>🏆 Rank</span>
               <span>Pts</span>
             </div>
-            <div className="flex flex-col gap-1 text-xs font-bold">
-               <div className="flex justify-between"><span className="text-gray-400">1. Pgem</span><span className="text-yellow-400">1299</span></div>
-               <div className="flex justify-between"><span className="text-gray-400">2. Sil</span><span className="text-gray-300">855</span></div>
-               <div className="flex justify-between text-[#4ade80] mt-1"><span>3. You</span><span>{currentScore}</span></div>
+            <div className="flex flex-col gap-1 font-bold">
+               <div className="flex justify-between"><span className="text-gray-400 truncate w-12">1. Pgem</span><span className="text-yellow-400">1299</span></div>
+               <div className="flex justify-between"><span className="text-gray-400 truncate w-12">2. Sil</span><span className="text-gray-300">855</span></div>
+               <div className="flex justify-between text-[#4ade80] mt-1"><span className="truncate w-12">3. You</span><span>{currentScore}</span></div>
             </div>
           </div>
         </div>
 
-        {/* BOTTOM ROW: Premium Image Power-up Buttons */}
-        <div className="flex justify-end items-end w-full pb-4 pr-2">
-           <div className="flex gap-4 pointer-events-auto">
+        {/* BOTTOM ROW: Power-up Buttons WITH INVENTORY COUNTS */}
+        <div className="flex justify-end items-end w-full pb-6 pr-2">
+           <div className="flex gap-3 pointer-events-auto">
+              
               {/* SPEED POWER-UP */}
-              <button className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-md border-2 border-yellow-500/50 flex items-center justify-center shadow-[0_0_20px_rgba(234,179,8,0.3)] active:scale-90 transition-all p-3">
-                <img src="/assets/powerup_speed.png" alt="Speed" className="w-full h-full object-contain drop-shadow-md" />
+              <button className="relative w-[52px] h-[52px] rounded-full bg-black/60 backdrop-blur-md border-2 border-yellow-500/60 flex items-center justify-center shadow-[0_0_15px_rgba(234,179,8,0.3)] active:scale-90 transition-all p-2.5">
+                <img src="/assets/powerup_speed.png" alt="Speed" className={`w-full h-full object-contain ${inventoryBalances.speed === 0 ? 'opacity-30 grayscale' : 'drop-shadow-md'}`} />
+                <span className="absolute -top-1 -right-1 bg-black border border-white/20 text-white text-[9px] w-[22px] h-[22px] rounded-full flex items-center justify-center font-black shadow-lg">
+                  {inventoryBalances.speed}
+                </span>
               </button>
               
               {/* SHIELD POWER-UP */}
-              <button className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-md border-2 border-blue-500/50 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.3)] active:scale-90 transition-all p-3">
-                <img src="/assets/powerup_shield.png" alt="Shield" className="w-full h-full object-contain drop-shadow-md" />
+              <button className="relative w-[52px] h-[52px] rounded-full bg-black/60 backdrop-blur-md border-2 border-blue-500/60 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.3)] active:scale-90 transition-all p-2.5">
+                <img src="/assets/powerup_shield.png" alt="Shield" className={`w-full h-full object-contain ${inventoryBalances.shield === 0 ? 'opacity-30 grayscale' : 'drop-shadow-md'}`} />
+                <span className="absolute -top-1 -right-1 bg-black border border-white/20 text-white text-[9px] w-[22px] h-[22px] rounded-full flex items-center justify-center font-black shadow-lg">
+                  {inventoryBalances.shield}
+                </span>
               </button>
 
               {/* MAGNET POWER-UP */}
-              <button className="w-16 h-16 rounded-full bg-black/40 backdrop-blur-md border-2 border-purple-500/50 flex items-center justify-center shadow-[0_0_20px_rgba(168,85,247,0.3)] active:scale-90 transition-all p-3">
-                <img src="/assets/powerup_magnet.png" alt="Magnet" className="w-full h-full object-contain drop-shadow-md" />
+              <button className="relative w-[52px] h-[52px] rounded-full bg-black/60 backdrop-blur-md border-2 border-purple-500/60 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)] active:scale-90 transition-all p-2.5">
+                <img src="/assets/powerup_magnet.png" alt="Magnet" className={`w-full h-full object-contain ${inventoryBalances.magnet === 0 ? 'opacity-30 grayscale' : 'drop-shadow-md'}`} />
+                <span className="absolute -top-1 -right-1 bg-black border border-white/20 text-white text-[9px] w-[22px] h-[22px] rounded-full flex items-center justify-center font-black shadow-lg">
+                  {inventoryBalances.magnet}
+                </span>
               </button>
+
            </div>
         </div>
         
