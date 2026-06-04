@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Phaser from 'phaser';
 
 // ==========================================
@@ -67,7 +67,7 @@ class AudioSynth {
 const sfx = new AudioSynth();
 
 // ==========================================
-// GAME ENGINE
+// GAME ENGINE COMPONENT
 // ==========================================
 interface PhaserGameProps {
   walletAddress?: string;
@@ -79,7 +79,17 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
   const phaserInstance = useRef<Phaser.Game | null>(null);
   const onGameOverRef = useRef(onGameOver);
 
+  // Sync Score to React UI
+  const [currentScore, setCurrentScore] = useState(0);
+
   useEffect(() => { onGameOverRef.current = onGameOver; }, [onGameOver]);
+
+  useEffect(() => {
+    // Custom Event Listener to grab score from Phaser without unmounting
+    const handleScoreUpdate = (e: any) => setCurrentScore(e.detail);
+    window.addEventListener('updatePhaserScore', handleScoreUpdate);
+    return () => window.removeEventListener('updatePhaserScore', handleScoreUpdate);
+  }, []);
 
   useEffect(() => {
     if (!gameRef.current || phaserInstance.current) return;
@@ -89,18 +99,22 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     // ---------------------------------------------------------
     const HEAD_SCALE = 0.25;  
     const BODY_SCALE = 0.22;  
-    const VISUAL_OFFSET = Math.PI; // Fixes the Upside-Down AI Image!
+    const VISUAL_OFFSET = Math.PI; 
     
     const SPEED = 280; 
-    const RECORD_DISTANCE = 2; // Ultra Smooth Recording
+    const RECORD_DISTANCE = 2; 
     const SPACING_INDEX = 10;  
     // ---------------------------------------------------------
 
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
-      width: window.innerWidth < 800 ? window.innerWidth - 32 : 800,
-      height: 450,
-      parent: gameRef.current,
+      // FULL SCREEN DEVICE SCALING
+      scale: {
+        mode: Phaser.Scale.RESIZE,
+        parent: gameRef.current,
+        width: '100%',
+        height: '100%',
+      },
       backgroundColor: '#06090E',
       physics: { default: 'arcade', arcade: { debug: false } },
       scene: { preload, create, update }
@@ -109,18 +123,16 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     let head: Phaser.Physics.Arcade.Sprite;
     let snakeBody: Phaser.GameObjects.Sprite[] = [];
     let pathHistory: { x: number, y: number, moveAngle: number }[] = [];
-
     let food: Phaser.Physics.Arcade.Sprite;
-    let scoreText: Phaser.GameObjects.Text;
-    let score = 0;
+    
+    // Joystick Variables
+    let joystickBase: Phaser.GameObjects.Arc;
+    let joystickThumb: Phaser.GameObjects.Arc;
+    let isJoystickActive = false;
 
-    let targetX = 1500;
-    let targetY = 1500;
-    let isTouching = false;
+    let score = 0;
     let isEpicFood = false;
     let foodTimer = 0;
-    
-    // YOUR NEW MECHANICS!
     let pendingGrowth = 0;
     let isEating = false;
 
@@ -139,7 +151,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     function create(this: Phaser.Scene) {
       this.physics.world.setBounds(0, 0, 3000, 3000);
 
-      // Dimmed grid to make the bright snake pop!
       const grid = this.add.tileSprite(1500, 1500, 3000, 3000, 'arena_default').setDepth(0);
       grid.setAlpha(0.3);
 
@@ -149,13 +160,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       head.setCollideWorldBounds(true);
       head.setData('moveAngle', -Math.PI / 2); 
 
-      // Pre-fill history to prevent bunching
       for (let i = 0; i <= 25 * SPACING_INDEX + 10; i++) {
-        pathHistory.push({ 
-          x: 1500, 
-          y: 1500 + (i * RECORD_DISTANCE), 
-          moveAngle: -Math.PI / 2 
-        });
+        pathHistory.push({ x: 1500, y: 1500 + (i * RECORD_DISTANCE), moveAngle: -Math.PI / 2 });
       }
 
       for(let i=0; i<20; i++) {
@@ -169,7 +175,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       food = this.physics.add.sprite(0, 0, 'food_normal');
       food.setDepth(5);
 
-      // YOUR PARTICLE GENERATOR
       const gfx = this.make.graphics({ x: 0, y: 0 });
       gfx.fillStyle(0xffffff);
       gfx.fillCircle(4, 4, 4);
@@ -182,38 +187,54 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       this.cameras.main.setBounds(0, 0, 3000, 3000);
       this.cameras.main.setZoom(0.85);
 
-      // PREMIUM UI SCORE TEXT
-      scoreText = this.add.text(30, 30, '💎 YIELD: 0 cUSD', { 
-        fontSize: '28px', 
-        fontFamily: 'system-ui, -apple-system, sans-serif', 
-        color: '#ffffff', 
-        fontStyle: '900',
-        stroke: '#000000',
-        strokeThickness: 5,
-        shadow: { offsetX: 0, offsetY: 4, color: '#000000', blur: 4, fill: true }
-      }).setScrollFactor(0).setDepth(2000);
+      this.physics.add.overlap(head, food, () => eatFood(this), undefined, this);
 
-      this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => { isTouching = true; targetX = pointer.worldX; targetY = pointer.worldY; });
-      this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => { if (isTouching || pointer.isDown) { targetX = pointer.worldX; targetY = pointer.worldY; } });
-      this.input.on('pointerup', () => { isTouching = false; });
+      // =====================================
+      // ON-SCREEN REFLECTIVE VIRTUAL JOYSTICK
+      // =====================================
+      this.input.addPointer(2); // Enable multi-touch
+
+      joystickBase = this.add.circle(0, 0, 60, 0xffffff, 0.1).setScrollFactor(0).setDepth(3000).setVisible(false);
+      joystickThumb = this.add.circle(0, 0, 30, 0xffffff, 0.3).setScrollFactor(0).setDepth(3000).setVisible(false);
+
+      this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => { 
+        // Only trigger joystick on the left 70% of the screen (leaves right side for buttons)
+        if (pointer.x > this.cameras.main.width * 0.7) return; 
+        
+        isJoystickActive = true;
+        joystickBase.setPosition(pointer.x, pointer.y).setVisible(true);
+        joystickThumb.setPosition(pointer.x, pointer.y).setVisible(true);
+      });
+
+      this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => { 
+        if (isJoystickActive && pointer.isDown) { 
+          const angle = Phaser.Math.Angle.Between(joystickBase.x, joystickBase.y, pointer.x, pointer.y);
+          const dist = Math.min(Phaser.Math.Distance.Between(joystickBase.x, joystickBase.y, pointer.x, pointer.y), 40);
+
+          joystickThumb.setPosition(
+            joystickBase.x + Math.cos(angle) * dist,
+            joystickBase.y + Math.sin(angle) * dist
+          );
+
+          head.setData('moveAngle', angle);
+        } 
+      });
+
+      this.input.on('pointerup', () => { 
+        isJoystickActive = false; 
+        joystickBase.setVisible(false);
+        joystickThumb.setVisible(false);
+      });
     }
 
     function update(this: Phaser.Scene, time: number, delta: number) {
       if (!head || !head.body) return;
 
-      const targetAngle = Phaser.Math.Angle.Between(head.x, head.y, targetX, targetY);
       let currentMoveAngle = head.getData('moveAngle');
-
-      if (isTouching || this.input.activePointer.isDown) {
-         currentMoveAngle = Phaser.Math.Angle.RotateTo(currentMoveAngle, targetAngle, 0.15 * (delta / 16));
-      }
-      head.setData('moveAngle', currentMoveAngle);
       this.physics.velocityFromRotation(currentMoveAngle, SPEED, (head.body as Phaser.Physics.Arcade.Body).velocity);
 
-      // CALIBRATED ROTATION
       head.rotation = currentMoveAngle + VISUAL_OFFSET;
 
-      // YOUR MAGNETIC VACUUM EFFECT!
       const foodDistance = Phaser.Math.Distance.Between(head.x, head.y, food.x, food.y);
 
       if (foodDistance < 140 && !isEating) {
@@ -226,7 +247,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         eatFood(this);
       }
 
-      // LINEAR INTERPOLATION (Stops "String of Beads" lag issues)
       const lastPos = pathHistory[0];
       const distToLast = Phaser.Math.Distance.Between(head.x, head.y, lastPos.x, lastPos.y);
 
@@ -250,12 +270,11 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
         if (targetPos) {
           snakeBody[i].setPosition(targetPos.x, targetPos.y);
-
+          
           const frontSegment = i === 0 ? head : snakeBody[i - 1];
           const angleToFront = Phaser.Math.Angle.Between(snakeBody[i].x, snakeBody[i].y, frontSegment.x, frontSegment.y);
           snakeBody[i].rotation = angleToFront + VISUAL_OFFSET;
 
-          // Seamless Tail Tapering
           const taperStart = snakeBody.length - 12;
           if (i > taperStart) {
             const step = (BODY_SCALE - 0.08) / 12;
@@ -273,7 +292,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         if (foodTimer <= 0) spawnFood(this); 
       }
 
-      // YOUR GRADUAL GROWTH QUEUE!
       if (pendingGrowth > 0 && time % 60 < 16) {
         const lastSegment = snakeBody[snakeBody.length - 1];
         lastSegment.setTexture('classic_body');
@@ -314,13 +332,32 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       }
     }
 
-    // YOUR PREMIUM ANIMATED EATING FUNCTION!
     function eatFood(scene: Phaser.Scene) {
       if (isEating) return;
       isEating = true;
       sfx.playEat();
 
-      // Head gulp animation
+      const points = isEpicFood ? 45 : 15;
+
+      // 💥 PREMIUM FLOATING POP-UP SCORE 💥
+      const popup = scene.add.text(head.x, head.y - 40, `+${points}`, {
+        fontSize: '38px',
+        fontFamily: 'Arial',
+        color: '#4ade80',
+        fontStyle: '900',
+        stroke: '#000000',
+        strokeThickness: 6
+      }).setOrigin(0.5).setDepth(2500);
+
+      scene.tweens.add({
+        targets: popup,
+        y: popup.y - 100, // Float upwards
+        alpha: 0,
+        duration: 900,
+        ease: 'Cubic.out',
+        onComplete: () => popup.destroy()
+      });
+
       scene.tweens.add({
         targets: head,
         scale: HEAD_SCALE * 1.25,
@@ -328,7 +365,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         yoyo: true
       });
 
-      // Food sparks explosion
       scene.add.particles(food.x, food.y, 'foodSpark', {
         speed: { min: 60, max: 220 },
         lifespan: 350,
@@ -336,7 +372,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         scale: { start: 0.4, end: 0 }
       });
 
-      // Vacuum shrink animation
       scene.tweens.add({
         targets: food,
         scale: 0,
@@ -346,15 +381,9 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         onComplete: () => {
           pendingGrowth += isEpicFood ? 12 : 6;
 
-          score += isEpicFood ? 20 : 5;
-          scoreText.setText(`💎 YIELD: ${score} cUSD`);
-
-          scene.tweens.add({
-            targets: scoreText,
-            scale: 1.2,
-            duration: 100,
-            yoyo: true
-          });
+          score += points;
+          // Send updated score to React UI
+          window.dispatchEvent(new CustomEvent('updatePhaserScore', { detail: score }));
 
           spawnFood(scene);
           isEating = false;
@@ -386,7 +415,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
           snakeBody.push(bodyPart);
         }
         score = 0;
-        scoreText.setText('💎 YIELD: 0 cUSD');
+        window.dispatchEvent(new CustomEvent('updatePhaserScore', { detail: score }));
         spawnFood(scene);
       });
     }
@@ -400,11 +429,64 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     };
   }, []);
 
+  // =========================================================
+  // 🎨 REACT UI OVERLAY (Perfectly matches the reference video)
+  // =========================================================
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center bg-[#06090E] relative">
-      <div ref={gameRef} className="rounded-xl overflow-hidden shadow-[0_0_40px_rgba(34,197,94,0.15)] w-full max-w-[800px]" />
-      <div className="absolute top-4 right-4 pointer-events-none opacity-50 bg-black/50 px-3 py-1 rounded-full text-xs font-bold text-white/70 tracking-widest border border-white/10">
-        DRAG TO STEER
+    // FULL SCREEN BREAKOUT CONTAINER
+    <div className="fixed inset-0 w-full h-[100dvh] bg-[#06090E] z-[9999] overflow-hidden select-none touch-none">
+      
+      {/* Phaser Canvas */}
+      <div ref={gameRef} className="absolute inset-0 w-full h-full" />
+
+      {/* UI OVERLAY (Pointer-events-none so touches pass through to the game joystick) */}
+      <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 sm:p-8 z-10">
+        
+        {/* TOP ROW */}
+        <div className="flex justify-between items-start w-full">
+          
+          {/* TOP LEFT: Back Arrow */}
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => onGameOverRef.current?.(currentScore)} 
+              className="pointer-events-auto bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/10 w-12 h-12 rounded-2xl flex items-center justify-center text-white transition-all active:scale-95 shadow-lg"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            </button>
+          </div>
+
+          {/* TOP CENTER: Score & Kills */}
+          <div className="flex flex-col items-center mt-2">
+             <div className="w-32 h-2.5 bg-black/50 rounded-full mb-2 overflow-hidden border border-white/10">
+                <div className="h-full bg-[#4ade80] w-[30%] shadow-[0_0_10px_#4ade80]"></div>
+             </div>
+             <div className="text-5xl font-black text-white drop-shadow-md leading-none">{currentScore}</div>
+             <div className="text-base font-bold text-white mt-1">Kills: <span className="text-gray-300">3</span></div>
+          </div>
+
+          {/* TOP RIGHT: Leaderboard */}
+          <div className="pointer-events-auto bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-3 w-36 text-white shadow-lg hidden sm:block">
+            <div className="flex justify-between items-center mb-1 pb-1 border-b border-white/10 text-yellow-400 font-bold text-xs">
+              <span>🏆 Rank</span>
+              <span>Pts</span>
+            </div>
+            <div className="flex flex-col gap-1 text-xs font-bold">
+               <div className="flex justify-between"><span className="text-gray-400">1. Pgem</span><span className="text-yellow-400">1299</span></div>
+               <div className="flex justify-between"><span className="text-gray-400">2. Sil</span><span className="text-gray-300">855</span></div>
+               <div className="flex justify-between text-[#4ade80] mt-1"><span>3. You</span><span>{currentScore}</span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* BOTTOM ROW: Power-up Buttons */}
+        <div className="flex justify-end items-end w-full pb-4 pr-2">
+           <div className="flex gap-4 pointer-events-auto">
+              <button className="w-16 h-16 rounded-full bg-yellow-500/20 border-2 border-yellow-500 text-yellow-400 flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(234,179,8,0.4)] active:scale-90 transition-all">⚡</button>
+              <button className="w-16 h-16 rounded-full bg-blue-500/20 border-2 border-blue-500 text-blue-400 flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(59,130,246,0.4)] active:scale-90 transition-all">🛡️</button>
+              <button className="w-16 h-16 rounded-full bg-purple-500/20 border-2 border-purple-500 text-purple-400 flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(168,85,247,0.4)] active:scale-90 transition-all">🧲</button>
+           </div>
+        </div>
+        
       </div>
     </div>
   );
