@@ -164,15 +164,12 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     // 🛠️ PREMIUM SNAKE TUNING 🛠️
     // ---------------------------------------------------------
     const HEAD_SCALE = 0.18;  
-    
-    // ADJUST THIS based on your new image size! If it looks too big/small compared to the head, tweak it.
     const BODY_SCALE = 0.15; 
-    
     const VISUAL_OFFSET = Math.PI / 2; // Matches Top-Down Head Perfectly
     
     const BASE_SPEED = 280; 
     const RECORD_DISTANCE = 3; 
-    const SPACING_INDEX = 5; // Distance between overlapping scales
+    const SPACING_INDEX = 5; 
     // ---------------------------------------------------------
 
     const config: Phaser.Types.Core.GameConfig = {
@@ -215,10 +212,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     function preload(this: Phaser.Scene) {
       this.load.image('arena_default', '/assets/arena_default.png');
       this.load.image('classic_head', '/assets/classic_head.png');
-      
-      // 🟢 WE ARE LOADING YOUR CUSTOM CIRCULAR SCALES 🟢
       this.load.image('classic_body', '/assets/classic_body.png');
-      
       this.load.image('food_normal', '/assets/food_normal.png');
       this.load.image('food_epic', '/assets/food_epic.png');
     }
@@ -389,7 +383,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         duration: 150,
         yoyo: true,
         onUpdate: (tween) => {
-          tongueOffset = tween.getValue();
+          // FIX: Explicitly cast to number to satisfy TypeScript compiler!
+          tongueOffset = Number(tween.getValue()) || 0;
         },
         onComplete: () => {
           tongueOffset = 0;
@@ -457,7 +452,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         if (targetPos) {
           snakeBody[i].setPosition(targetPos.x, targetPos.y);
           
-          // 🟢 ROTATION IS BACK ON: Makes the scales curve with the path
           const frontSegment = i === 0 ? head : snakeBody[i - 1];
           const angleToFront = Phaser.Math.Angle.Between(snakeBody[i].x, snakeBody[i].y, frontSegment.x, frontSegment.y);
           snakeBody[i].rotation = angleToFront + VISUAL_OFFSET; 
