@@ -161,16 +161,16 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     if (!gameRef.current || phaserInstance.current) return;
 
     // ---------------------------------------------------------
-    // 🛠️ AAA DISPLAY SIZE CALIBRATION 🛠️
+    // 🛠️ AAA SMOOTH-FOLLOW CALIBRATION 🛠️
     // ---------------------------------------------------------
-    const HEAD_SIZE = 55;  
-    const BODY_SIZE = 45;  
-    const VISUAL_OFFSET = Math.PI / 2; 
+    const BASE_SPEED = 240; 
+    const VISUAL_OFFSET = Math.PI / 2; // Aligns generated sprites perfectly
     
-    const BASE_SPEED = 280; 
-    const RECORD_DISTANCE = 4; 
-    const SPACING_INDEX = 4; 
-    const COLLISION_RADIUS = 22; 
+    // Strict Pixel Sizes for perfect overlap
+    const HEAD_SIZE = 55;  
+    const BODY_SIZE = 42;  
+    const TARGET_SPACING = 16; // Distance between overlapping segments
+    const COLLISION_RADIUS = 28; 
     // ---------------------------------------------------------
 
     const config: Phaser.Types.Core.GameConfig = {
@@ -183,7 +183,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
     let head: Phaser.Physics.Arcade.Sprite;
     let snakeBody: Phaser.GameObjects.Sprite[] = [];
-    let pathHistory: { x: number, y: number, angle: number }[] = [];
     let food: Phaser.Physics.Arcade.Sprite;
 
     let tongue: Phaser.GameObjects.Sprite;
@@ -211,8 +210,6 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
     function preload(this: Phaser.Scene) {
       this.load.image('arena_default', '/assets/arena_default.png');
-      // NO LONGER LOADING YOUR BAD LOCAL IMAGES! 
-      // We are fully generating them below to perfectly match the video.
     }
 
     function create(this: Phaser.Scene) {
@@ -222,47 +219,39 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       grid.setAlpha(0.4);
 
       // ========================================================
-      // 🎨 PROCEDURAL AAA ASSET GENERATOR (MATCHES VIDEO)
+      // 🎨 PROCEDURAL VIDEO-MATCHING ASSET GENERATOR
+      // Generates perfect transparent sprites via WebGL
       // ========================================================
-
-      // 1. CARTOON HEAD WITH CROWN
+      
+      // 1. CARTOON HEAD WITH CROWN (Matches video)
       const hgfx = this.make.graphics({ x: 0, y: 0 }, false);
-      // Dark border
-      hgfx.fillStyle(0x14532d, 1); hgfx.fillEllipse(30, 40, 50, 60);
-      // Bright lime-green face
-      hgfx.fillStyle(0x4ade80, 1); hgfx.fillEllipse(30, 40, 42, 52);
-      // Big cartoon eyes (White)
-      hgfx.fillStyle(0xffffff, 1); hgfx.fillCircle(18, 25, 10); hgfx.fillCircle(42, 25, 10);
-      // Pupils (Black)
-      hgfx.fillStyle(0x000000, 1); hgfx.fillCircle(18, 22, 5); hgfx.fillCircle(42, 22, 5);
-      // Eye highlights (Cute anime style)
-      hgfx.fillStyle(0xffffff, 1); hgfx.fillCircle(16, 20, 2); hgfx.fillCircle(40, 20, 2);
+      hgfx.fillStyle(0x14532d, 1); hgfx.fillEllipse(30, 35, 50, 60); // Dark Border
+      hgfx.fillStyle(0x4ade80, 1); hgfx.fillEllipse(30, 35, 42, 52); // Bright lime-green face
+      // Big Eyes
+      hgfx.fillStyle(0xffffff, 1); hgfx.fillCircle(16, 20, 12); hgfx.fillCircle(44, 20, 12);
+      hgfx.fillStyle(0x000000, 1); hgfx.fillCircle(16, 16, 6); hgfx.fillCircle(44, 16, 6);
+      hgfx.fillStyle(0xffffff, 1); hgfx.fillCircle(14, 14, 2); hgfx.fillCircle(42, 14, 2);
       // Golden Crown
       hgfx.fillStyle(0xfacc15, 1);
-      hgfx.beginPath();
-      hgfx.moveTo(15, 15); hgfx.lineTo(20, -2); hgfx.lineTo(30, 10); hgfx.lineTo(40, -2); hgfx.lineTo(45, 15);
-      hgfx.closePath(); hgfx.fillPath();
-      hgfx.generateTexture('premium_head', 60, 80);
+      hgfx.beginPath(); hgfx.moveTo(15, 5); hgfx.lineTo(20, -12); hgfx.lineTo(30, 0); hgfx.lineTo(40, -12); hgfx.lineTo(45, 5); hgfx.closePath(); hgfx.fillPath();
+      // Red Jewel
+      hgfx.fillStyle(0xdc2626, 1); hgfx.fillCircle(30, 0, 4);
+      hgfx.generateTexture('video_head', 60, 70);
       hgfx.destroy();
 
-      // 2. GLOSSY BODY SEGMENT
+      // 2. GLOSSY BODY SEGMENT (Matches video)
       const bgfx = this.make.graphics({ x: 0, y: 0 }, false);
-      bgfx.fillStyle(0x14532d, 1); // Dark border
-      bgfx.fillCircle(25, 25, 25);
-      bgfx.fillStyle(0x4ade80, 1); // Bright lime green
-      bgfx.fillCircle(25, 25, 21);
-      bgfx.fillStyle(0x86efac, 0.8); // Specular glossy highlight
-      bgfx.fillEllipse(18, 16, 14, 8);
-      bgfx.generateTexture('premium_body', 50, 50);
+      bgfx.fillStyle(0x14532d, 1); bgfx.fillCircle(25, 25, 25);
+      bgfx.fillStyle(0x4ade80, 1); bgfx.fillCircle(25, 25, 21);
+      bgfx.fillStyle(0x86efac, 0.8); bgfx.fillEllipse(18, 16, 14, 8); // Glossy highlight
+      bgfx.generateTexture('video_body', 50, 50);
       bgfx.destroy();
 
       // 3. TONGUE
       const tgfx = this.make.graphics({ x: 0, y: 0 }, false);
       tgfx.lineStyle(3, 0xdc2626, 1); 
-      tgfx.beginPath();
-      tgfx.moveTo(15, 30); tgfx.lineTo(15, 10); tgfx.lineTo(8, 0);   
-      tgfx.moveTo(15, 10); tgfx.lineTo(22, 0);  
-      tgfx.strokePath();
+      tgfx.beginPath(); tgfx.moveTo(15, 30); tgfx.lineTo(15, 10); tgfx.lineTo(8, 0);   
+      tgfx.moveTo(15, 10); tgfx.lineTo(22, 0); tgfx.strokePath();
       tgfx.generateTexture('premium_tongue', 30, 40);
       tgfx.destroy();
 
@@ -284,10 +273,10 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       // ========================================================
 
       // INITIALIZE HEAD
-      head = this.physics.add.sprite(1500, 1500, 'premium_head');
+      head = this.physics.add.sprite(1500, 1500, 'video_head');
       head.setDepth(1000); 
       head.setOrigin(0.5, 0.5); 
-      head.setDisplaySize(HEAD_SIZE, HEAD_SIZE + 10); // Account for crown height
+      head.setDisplaySize(HEAD_SIZE, HEAD_SIZE + 10); // Account for crown
       head.setCollideWorldBounds(true);
       head.setData('moveAngle', -Math.PI / 2); 
 
@@ -295,17 +284,9 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       tongue.setDepth(999); 
       tongue.setVisible(false);
 
-      for (let i = 0; i <= 60 * SPACING_INDEX + 10; i++) {
-        pathHistory.push({ 
-            x: 1500, 
-            y: 1500 + (i * (BASE_SPEED/60)), 
-            angle: -Math.PI / 2 
-        });
-      }
-
       // INITIALIZE BODY
       for(let i=0; i<15; i++) {
-        const bodyPart = this.add.sprite(1500, 1500, 'premium_body');
+        const bodyPart = this.add.sprite(1500, 1500 + (i * TARGET_SPACING), 'video_body');
         bodyPart.setOrigin(0.5, 0.5);
         bodyPart.setDepth(998 - i);
         bodyPart.setDisplaySize(BODY_SIZE, BODY_SIZE); 
@@ -341,27 +322,23 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         isDead = false;
         score = 0;
         pendingGrowth = 0;
-        pathHistory = [];
         tongueOffset = 0;
-
+        
         head.setPosition(1500, 1500);
-        head.setData('moveAngle', -Math.PI / 2);
+        currentMoveAngle = -Math.PI / 2;
         targetJoystickAngle = -Math.PI / 2;
+        head.rotation = currentMoveAngle + VISUAL_OFFSET;
         head.setVisible(true);
-
-        for (let i = 0; i <= 60 * SPACING_INDEX + 10; i++) {
-          pathHistory.push({ x: 1500, y: 1500 + (i * (BASE_SPEED/60)), angle: -Math.PI / 2 });
-        }
 
         snakeBody.forEach(s => s.destroy());
         snakeBody = [];
         for(let i=0; i<15; i++) {
-          const bodyPart = this.add.sprite(1500, 1500, 'premium_body');
+          const bodyPart = this.add.sprite(1500, 1500 + (i * TARGET_SPACING), 'video_body');
           bodyPart.setDepth(998 - i);
           bodyPart.setDisplaySize(BODY_SIZE, BODY_SIZE); 
           snakeBody.push(bodyPart);
         }
-
+        
         window.dispatchEvent(new CustomEvent('updatePhaserScore', { detail: score }));
         spawnFood(this);
       });
@@ -455,18 +432,14 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
     function update(this: Phaser.Scene, time: number, delta: number) {
       if (!head || !head.body || isDead) return;
 
+      // Smooth Angular Damping (Replaces 90-degree corners with beautiful curves)
       if (isJoystickActive) {
         let diff = Phaser.Math.Angle.Wrap(targetJoystickAngle - currentMoveAngle);
-        currentMoveAngle += diff * 0.12; 
+        currentMoveAngle += diff * 0.15; 
       }
       
       this.physics.velocityFromRotation(currentMoveAngle, BASE_SPEED * powerUpSpeedMult, (head.body as Phaser.Physics.Arcade.Body).velocity);
       head.rotation = currentMoveAngle + VISUAL_OFFSET;
-
-      pathHistory.unshift({ x: head.x, y: head.y, angle: currentMoveAngle });
-      if (pathHistory.length > snakeBody.length * SPACING_INDEX + 10) {
-        pathHistory.pop();
-      }
 
       if (!isEating) {
         if (powerUpSpeedMult > 1) {
@@ -501,34 +474,49 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       if (foodDistance < 30 && !isEating) eatFood(this);
 
+      // ========================================================
+      // 🚀 THE AAA SOLUTION: INVERSE KINEMATICS (IK) FOLLOW
+      // This is the exact logic from the guide you pasted.
+      // It uses Phaser.Math.Linear (Lerp) to smoothly drag segments 
+      // behind each other, guaranteeing no gaps and flawless S-curves!
+      // ========================================================
       const totalSegments = snakeBody.length;
       for (let i = 0; i < totalSegments; i++) {
-        const historyIndex = (i + 1) * SPACING_INDEX;
-        const targetPos = pathHistory[historyIndex];
+        const current = snakeBody[i];
+        const target = i === 0 ? head : snakeBody[i - 1];
 
-        if (targetPos) {
-          snakeBody[i].setPosition(targetPos.x, targetPos.y);
-          snakeBody[i].rotation = targetPos.angle + VISUAL_OFFSET; 
+        const distToTarget = Phaser.Math.Distance.Between(current.x, current.y, target.x, target.y);
+        const angleToTarget = Phaser.Math.Angle.Between(current.x, current.y, target.x, target.y);
 
-          const taperStart = totalSegments - 8;
-          let currentBodySize = BODY_SIZE;
+        // If a segment falls behind, gently pull it towards the segment in front of it
+        if (distToTarget > TARGET_SPACING) {
+           current.x = Phaser.Math.Linear(current.x, target.x - Math.cos(angleToTarget) * TARGET_SPACING, 0.4);
+           current.y = Phaser.Math.Linear(current.y, target.y - Math.sin(angleToTarget) * TARGET_SPACING, 0.4);
+        }
+        
+        // Natural segment rotation
+        current.rotation = angleToTarget + VISUAL_OFFSET;
 
-          if (i > taperStart) {
-            const ratio = (i - taperStart) / 8;
-            currentBodySize = BODY_SIZE - (ratio * (BODY_SIZE - 10)); 
-          }
+        // Beautiful Tail Tapering
+        const taperStart = totalSegments - 8;
+        let currentBodySize = BODY_SIZE;
 
-          if (powerUpSpeedMult > 1) {
-             snakeBody[i].setDisplaySize(currentBodySize * 0.9, currentBodySize * 1.15);
-          } else {
-             snakeBody[i].setDisplaySize(currentBodySize, currentBodySize);
-          }
+        if (i > taperStart) {
+          const ratio = (i - taperStart) / 8;
+          currentBodySize = BODY_SIZE - (ratio * (BODY_SIZE - 12)); // Shrinks tail to point
+        }
 
-          if (i > 15 && !isDead && !isShielded) {
-            const bodyDist = Phaser.Math.Distance.Between(head.x, head.y, snakeBody[i].x, snakeBody[i].y);
-            if (bodyDist < COLLISION_RADIUS) {
-              triggerDeath(this);
-            }
+        if (powerUpSpeedMult > 1) {
+           snakeBody[i].setDisplaySize(currentBodySize * 0.9, currentBodySize * 1.1);
+        } else {
+           snakeBody[i].setDisplaySize(currentBodySize, currentBodySize);
+        }
+
+        // Strict Self-Collision check (Ignores neck)
+        if (i > 15 && !isDead && !isShielded) {
+          const bodyDist = Phaser.Math.Distance.Between(head.x, head.y, snakeBody[i].x, snakeBody[i].y);
+          if (bodyDist < COLLISION_RADIUS) {
+            triggerDeath(this);
           }
         }
       }
@@ -542,7 +530,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       if (pendingGrowth > 0 && time % 10 < 3) {
         const lastSegment = snakeBody[snakeBody.length - 1];
-        const newTail = this.add.sprite(lastSegment.x, lastSegment.y, 'premium_body');
+        const newTail = this.add.sprite(lastSegment.x, lastSegment.y, 'video_body');
         newTail.setDepth(lastSegment.depth - 1);
         newTail.setDisplaySize(BODY_SIZE, BODY_SIZE);
         if (isShielded) newTail.setTint(0x60a5fa);
@@ -550,6 +538,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         pendingGrowth--;
       }
 
+      // Wall Bounce
       if (head.x <= 20 || head.x >= 2980 || head.y <= 20 || head.y >= 2980) {
         if (!isShielded) triggerDeath(this);
         else {
