@@ -340,21 +340,11 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       // ============================================================
       const tpgfx = this.make.graphics({ x: 0, y: 0 }, false);
       tpgfx.fillStyle(0x14532d, 1);
-      tpgfx.beginPath();
-      tpgfx.moveTo(16, 0);
-      tpgfx.bezierCurveTo(30, 0, 32, 10, 32, 14);
-      tpgfx.bezierCurveTo(32, 18, 16, 20, 16, 20);
-      tpgfx.bezierCurveTo(16, 20,  0, 18,  0, 14);
-      tpgfx.bezierCurveTo( 0, 10,  2,  0, 16,  0);
-      tpgfx.closePath(); tpgfx.fillPath();
+      tpgfx.fillEllipse(16, 10, 30, 20);
       tpgfx.fillStyle(0x16a34a, 1);
-      tpgfx.beginPath();
-      tpgfx.moveTo(16, 3);
-      tpgfx.bezierCurveTo(27, 3, 28, 10, 28, 13);
-      tpgfx.bezierCurveTo(28, 17, 16, 18, 16, 18);
-      tpgfx.bezierCurveTo(16, 18,  4, 17,  4, 13);
-      tpgfx.bezierCurveTo( 4, 10,  5,  3, 16,  3);
-      tpgfx.closePath(); tpgfx.fillPath();
+      tpgfx.fillEllipse(16, 10, 24, 15);
+      tpgfx.fillStyle(0x14532d, 0.7);
+      tpgfx.fillEllipse(16, 3, 10, 8);
       tpgfx.generateTexture('snake_tail', 32, 20);
       tpgfx.destroy();
 
