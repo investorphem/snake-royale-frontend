@@ -291,7 +291,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       // Smile line
       hgfx.lineStyle(2.5, 0x14532d, 1);
       hgfx.beginPath();
-      hgfx.moveTo(28, 80); hgfx.quadraticBezierTo(40, 88, 52, 80); hgfx.strokePath();
+      hgfx.moveTo(28, 80); hgfx.lineTo(34, 85); hgfx.lineTo(40, 87); hgfx.lineTo(46, 85); hgfx.lineTo(52, 80); hgfx.strokePath();
 
       hgfx.generateTexture('snake_head', 80, 100);
       hgfx.destroy();
