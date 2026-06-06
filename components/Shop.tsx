@@ -175,7 +175,7 @@ export default function Shop({ selectedCoin }: { selectedCoin: { symbol: string;
       for (const item of cart) {
         if (item.product.category === 'consumable') {
           // Uses /api/shop/purchase which verifies tx hash + prevents replay attacks
-          const res = await fetch('/api/shop/purchase', {
+          const res = await fetch('/api/shop/buy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -189,10 +189,10 @@ export default function Shop({ selectedCoin }: { selectedCoin: { symbol: string;
           if (!res.ok) throw new Error(result.error || 'Consumable mint failed');
 
         } else {
-          // FIX 4: Skins and arenas use the same /api/shop/purchase route
+          // FIX 4: Skins and arenas use the same /api/shop/buy route
           // with a unified 'inventory_items' table — no more split between
           // 'inventory' and 'inventory_items' tables causing inconsistency.
-          const res = await fetch('/api/shop/purchase', {
+          const res = await fetch('/api/shop/buy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
