@@ -1,24 +1,23 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js'; // Fixed: Swapped to the real unified package name
-import { createAuth } from "thirdweb/auth"; // Fixed: Migrated standalone verify hook to v5 createAuth object
+import { createClient } from '@supabase/supabase-js';
+import { createAuth } from "thirdweb/auth";
 import { createThirdwebClient } from "thirdweb";
 
-// 1. Initialize Thirdweb Client for secure backend transaction authentication
-const client = createThirdwebClient({ 
-  clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID || "3yd744Q5LPJ3BC1ndknBd0JLotNiKe4Dy-x2aqYEXKfNkzBLo3kXQL-5u0P3aMOX17uEdwClXg_FRKf_RSe09w" 
-}); 
-
-// 2. Initialize Thirdweb Auth Interface Instance
-const auth = createAuth({
-  client,
-  domain: process.env.NEXT_PUBLIC_AUTH_DOMAIN || "localhost:3000" // Fallback fallback parameters matching browser domains
+// FIX 1: Never hardcode a fallback clientId — if the env var is missing,
+// fail loudly at startup rather than silently using a broken/garbled key.
+const client = createThirdwebClient({
+  clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID!,
 });
 
-// 3. Initialize Supabase using the SECURE Service Role Key
-// This key is completely hidden from the browser because this code runs only on the server
+const auth = createAuth({
+  client,
+  domain: process.env.NEXT_PUBLIC_AUTH_DOMAIN || "localhost:3000",
+});
+
+// Service Role Key — server-side only, never exposed to the browser
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // Hidden backend environment variable
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 export async function POST(request: Request) {
@@ -29,31 +28,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 });
     }
 
-    // 4. Verify the signature via Thirdweb v5 Auth pipeline to prove wallet ownership
-    const verifiedProfile = await auth.verifyPayload({
-      payload,
-      signature,
-    });
+    // FIX 2: Validate username server-side — never trust frontend validation alone.
+    // Strip whitespace, enforce length, and only allow alphanumeric characters.
+    const cleanUsername = username.trim();
+    if (!cleanUsername) {
+      return NextResponse.json({ error: "Username cannot be empty" }, { status: 400 });
+    }
+    if (cleanUsername.length < 3) {
+      return NextResponse.json({ error: "Username must be at least 3 characters" }, { status: 400 });
+    }
+    if (cleanUsername.length > 15) {
+      return NextResponse.json({ error: "Username cannot exceed 15 characters" }, { status: 400 });
+    }
+    if (!/^[a-zA-Z0-9]+$/.test(cleanUsername)) {
+      return NextResponse.json({ error: "Username can only contain letters and numbers" }, { status: 400 });
+    }
+
+    // Verify signature via Thirdweb v5 Auth to prove wallet ownership
+    const verifiedProfile = await auth.verifyPayload({ payload, signature });
 
     if (!verifiedProfile.valid) {
       return NextResponse.json({ error: "Invalid signature or authorization expired" }, { status: 401 });
     }
 
-    // Capture uniform lowercased addresses to guarantee cross-table data integrity matches
     const walletAddress = verifiedProfile.payload.address.toLowerCase();
 
-    // 5. Perform the database operation securely using God Mode (Service Role)
     const { data, error } = await supabaseAdmin
       .from('players')
-      .upsert({ 
-        wallet_address: walletAddress, 
-        username: username.trim() 
-      }, { onConflict: 'wallet_address' })
+      .upsert(
+        { wallet_address: walletAddress, username: cleanUsername },
+        { onConflict: 'wallet_address' }
+      )
       .select()
       .single();
 
     if (error) {
-      // Catch both string definitions and standard Postgres 23505 unique code collisions safely
       if (error.message.includes('unique_username') || error.code === '23505') {
         return NextResponse.json({ error: "Username is already taken" }, { status: 409 });
       }
@@ -63,6 +72,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, player: data }, { status: 200 });
 
   } catch (err: any) {
+    console.error("Auth route error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
