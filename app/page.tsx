@@ -267,8 +267,7 @@ function SnakeRoyaleApp() {
         {activeTab === 'inventory'  && <Inventory />}
         {activeTab === 'clans'      && <Clans />}
         {activeTab === 'tournament' && <Tournament />}
-        {/* Pass refreshProfile so ProfileSidebar can trigger a re-fetch after saving */}
-        {activeTab === 'profile'    && <ProfileSidebar accountAddress={account?.address} onProfileUpdate={refreshProfile} />}
+        {activeTab === 'profile'    && <ProfileSidebar accountAddress={account?.address} />}
 
         {activeTab === 'home' && (
           <>
