@@ -5,71 +5,114 @@ import * as Phaser from 'phaser';
 
 class AudioSynth {
   private ctx: AudioContext | null = null;
+
   private init() {
     if (!this.ctx && typeof window !== 'undefined') {
-      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        this.ctx = new AudioContextClass();
+      }
     }
-    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
   }
+
   playHiss() {
-    this.init(); const ctx = this.ctx; if (!ctx) return;
+    this.init();
+    const ctx = this.ctx;
+    if (!ctx) return;
     const bufferSize = ctx.sampleRate * 0.3;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-    const noise = ctx.createBufferSource(); noise.buffer = buffer;
-    const bandpass = ctx.createBiquadFilter(); bandpass.type = 'bandpass';
-    bandpass.frequency.value = 4000; bandpass.Q.value = 1.0;
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.value = 4000;
+    bandpass.Q.value = 1.0;
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, ctx.currentTime);
     gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-    noise.connect(bandpass); bandpass.connect(gain); gain.connect(ctx.destination); noise.start();
+    noise.connect(bandpass);
+    bandpass.connect(gain);
+    gain.connect(ctx.destination);
+    noise.start();
   }
+
   playEat() {
-    this.init(); const ctx = this.ctx; if (!ctx) return;
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    this.init();
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(587.33, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.08);
     gain.gain.setValueAtTime(0.3, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-    osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.1);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.1);
   }
+
   playEpicSpawn() {
-    this.init(); const ctx = this.ctx; if (!ctx) return;
+    this.init();
+    const ctx = this.ctx;
+    if (!ctx) return;
     const now = ctx.currentTime;
     [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
-      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, now + i * 0.04);
       gain.gain.setValueAtTime(0.15, now + i * 0.04);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start(now + i * 0.04); osc.stop(now + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + i * 0.04);
+      osc.stop(now + 0.4);
     });
   }
+
   playDie() {
-    this.init(); const ctx = this.ctx; if (!ctx) return;
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    this.init();
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(150, ctx.currentTime);
     osc.frequency.linearRampToValueAtTime(40, ctx.currentTime + 0.4);
     gain.gain.setValueAtTime(0.4, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-    osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.4);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.4);
   }
+
   playPowerup() {
-    this.init(); const ctx = this.ctx; if (!ctx) return;
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    this.init();
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     osc.type = 'square';
     osc.frequency.setValueAtTime(400, ctx.currentTime);
     osc.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.3);
     gain.gain.setValueAtTime(0.2, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-    osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
   }
 }
+
 const sfx = new AudioSynth();
 
 interface PhaserGameProps {
@@ -85,52 +128,22 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
   const [currentKills, setCurrentKills] = useState(0);
   const [inventoryBalances, setInventoryBalances] = useState({ speed: 3, shield: 2, magnet: 3 });
   const [gameOverData, setGameOverData] = useState<{ score: number; kills: number } | null>(null);
-  const [isSavingScore, setIsSavingScore] = useState(false);
-
-  useEffect(() => { onGameOverRef.current = onGameOver; }, [onGameOver]);
 
   useEffect(() => {
-    const handleScoreUpdate = (e: any) => setCurrentScore(e.detail);
+    onGameOverRef.current = onGameOver;
+  }, [onGameOver]);
+
+  useEffect(() => {
+    const handleScoreUpdate = (e: Event) => setCurrentScore((e as CustomEvent).detail);
+    const handleGameOverUI = (e: Event) => setGameOverData((e as CustomEvent).detail);
     
-    // Securely push the end game score to our API route right on death
-    const handleGameOverUI = async (e: any) => {
-      const data = e.detail;
-      setGameOverData(data);
-
-      if (!walletAddress) return;
-
-      setIsSavingScore(true);
-      try {
-        const response = await fetch('/api/tournament/score', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            walletAddress: walletAddress,
-            score: data.score,
-            tournamentId: 'daily'
-          })
-        });
-
-        if (!response.ok) {
-          const errData = await response.json();
-          console.error('Failed to update tournament yield standings:', errData.error);
-        } else {
-          console.log('Score checked and recorded securely by database.');
-        }
-      } catch (err) {
-        console.error('Network failure connecting to score submission handler:', err);
-      } finally {
-        setIsSavingScore(false);
-      }
-    };
-
     window.addEventListener('updatePhaserScore', handleScoreUpdate);
     window.addEventListener('showGameOver', handleGameOverUI);
     return () => {
       window.removeEventListener('updatePhaserScore', handleScoreUpdate);
       window.removeEventListener('showGameOver', handleGameOverUI);
     };
-  }, [walletAddress]);
+  }, []);
 
   const handleUsePowerup = (type: 'speed' | 'shield' | 'magnet') => {
     if (inventoryBalances[type] > 0 && !gameOverData) {
@@ -199,21 +212,28 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       const grid = this.add.tileSprite(1500, 1500, 3000, 3000, 'arena_default').setDepth(0);
       grid.setAlpha(0.4);
 
+      // ============================================================
       // TEXTURE 1: HEAD
+      // ============================================================
       {
         const g = this.make.graphics({ x: 0, y: 0 }, false);
-        g.fillStyle(0xb45309, 1); g.fillRect(18, 28, 64, 10);
+        g.fillStyle(0xb45309, 1);
+        g.fillRect(18, 28, 64, 10);
         g.fillStyle(0xfbbf24, 1);
         g.beginPath(); g.moveTo(18, 38); g.lineTo(24, 10); g.lineTo(36, 30); g.closePath(); g.fillPath();
         g.beginPath(); g.moveTo(36, 38); g.lineTo(50, 4); g.lineTo(64, 38); g.closePath(); g.fillPath();
         g.beginPath(); g.moveTo(64, 38); g.lineTo(76, 10); g.lineTo(82, 38); g.closePath(); g.fillPath();
-        g.fillStyle(0xfcd34d, 1); g.fillRect(18, 30, 64, 12);
+        g.fillStyle(0xfcd34d, 1);
+        g.fillRect(18, 30, 64, 12);
         g.fillStyle(0xef4444, 1); g.fillCircle(50, 34, 5);
         g.fillStyle(0x93c5fd, 1); g.fillCircle(28, 35, 3);
         g.fillStyle(0x6ee7b7, 1); g.fillCircle(72, 35, 3);
-        g.fillStyle(0x14532d, 1); g.fillEllipse(50, 80, 76, 74);
-        g.fillStyle(0x16a34a, 1); g.fillEllipse(50, 80, 68, 66);
-        g.fillStyle(0x4ade80, 0.5); g.fillEllipse(50, 66, 44, 26);
+        g.fillStyle(0x14532d, 1);
+        g.fillEllipse(50, 80, 76, 74);
+        g.fillStyle(0x16a34a, 1);
+        g.fillEllipse(50, 80, 68, 66);
+        g.fillStyle(0x4ade80, 0.5);
+        g.fillEllipse(50, 66, 44, 26);
         g.fillStyle(0xffffff, 1); g.fillCircle(30, 72, 13);
         g.fillStyle(0x065f46, 1); g.fillCircle(30, 70, 9);
         g.fillStyle(0x000000, 1); g.fillCircle(30, 69, 5);
@@ -225,33 +245,51 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         g.lineStyle(3, 0x14532d, 1);
         g.beginPath(); g.arc(30, 72, 14, Math.PI * 1.25, Math.PI * 1.75); g.strokePath();
         g.beginPath(); g.arc(70, 72, 14, Math.PI * 1.25, Math.PI * 1.75); g.strokePath();
-        g.fillStyle(0x15803d, 1); g.fillEllipse(50, 98, 36, 22);
-        g.fillStyle(0x14532d, 1); g.fillCircle(42, 96, 3.5); g.fillCircle(58, 96, 3.5);
-        g.lineStyle(3, 0x14532d, 1); g.beginPath();
-        g.moveTo(34, 104); g.lineTo(40, 108); g.lineTo(50, 110); g.lineTo(60, 108); g.lineTo(66, 104);
+        g.fillStyle(0x15803d, 1);
+        g.fillEllipse(50, 98, 36, 22);
+        g.fillStyle(0x14532d, 1);
+        g.fillCircle(42, 96, 3.5);
+        g.fillCircle(58, 96, 3.5);
+        g.lineStyle(3, 0x14532d, 1);
+        g.beginPath();
+        g.moveTo(34, 104); g.lineTo(40, 108); g.lineTo(50, 110);
+        g.lineTo(60, 108); g.lineTo(66, 104);
         g.strokePath();
         g.generateTexture('snake_head', HEAD_CANVAS_W, HEAD_CANVAS_H);
         g.destroy();
       }
 
+      // ============================================================
       // TEXTURE 2: BODY SEGMENT
+      // ============================================================
       {
         const g = this.make.graphics({ x: 0, y: 0 }, false);
-        const cx = BODY_CANVAS / 2; const cy = BODY_CANVAS / 2; const r = 30;
-        g.fillStyle(0x14532d, 1); g.fillCircle(cx, cy, r);
-        g.fillStyle(0x16a34a, 1); g.fillCircle(cx, cy, r - 3);
-        g.fillStyle(0x22c55e, 0.6); g.fillCircle(cx, cy, r - 8);
+        const cx = BODY_CANVAS / 2;
+        const cy = BODY_CANVAS / 2;
+        const r = 30;
+        g.fillStyle(0x14532d, 1);
+        g.fillCircle(cx, cy, r);
+        g.fillStyle(0x16a34a, 1);
+        g.fillCircle(cx, cy, r - 3);
+        g.fillStyle(0x22c55e, 0.6);
+        g.fillCircle(cx, cy, r - 8);
         g.fillStyle(0x15803d, 0.6);
-        g.fillEllipse(cx - 10, cy - 10, 20, 13); g.fillEllipse(cx + 10, cy - 10, 20, 13);
+        g.fillEllipse(cx - 10, cy - 10, 20, 13);
+        g.fillEllipse(cx + 10, cy - 10, 20, 13);
         g.fillEllipse(cx, cy - 2, 22, 14);
-        g.fillEllipse(cx - 10, cy + 9, 20, 13); g.fillEllipse(cx + 10, cy + 9, 20, 13);
-        g.fillStyle(0x86efac, 0.5); g.fillEllipse(cx - 8, cy - 10, 16, 10);
-        g.lineStyle(1.5, 0x4ade80, 0.3); g.beginPath(); g.arc(cx, cy, r - 2, Math.PI * 1.1, Math.PI * 1.9); g.strokePath();
+        g.fillEllipse(cx - 10, cy + 9, 20, 13);
+        g.fillEllipse(cx + 10, cy + 9, 20, 13);
+        g.fillStyle(0x86efac, 0.5);
+        g.fillEllipse(cx - 8, cy - 10, 16, 10);
+        g.lineStyle(1.5, 0x4ade80, 0.3);
+        g.beginPath(); g.arc(cx, cy, r - 2, Math.PI * 1.1, Math.PI * 1.9); g.strokePath();
         g.generateTexture('snake_body', BODY_CANVAS, BODY_CANVAS);
         g.destroy();
       }
 
-      // TEXTURE 3: TAIL
+      // ============================================================
+      // ADDITIONAL TEXTURES
+      // ============================================================
       {
         const g = this.make.graphics({ x: 0, y: 0 }, false);
         g.fillStyle(0x14532d, 1); g.fillEllipse(20, 20, 38, 30);
@@ -260,18 +298,16 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         g.generateTexture('snake_tail', 40, 40);
         g.destroy();
       }
-
-      // TEXTURE 4: TONGUE
       {
         const g = this.make.graphics({ x: 0, y: 0 }, false);
-        g.lineStyle(4, 0xdc2626, 1); g.beginPath(); g.moveTo(15, 50); g.lineTo(15, 20); g.strokePath();
-        g.lineStyle(3, 0xdc2626, 1); g.beginPath(); g.moveTo(15, 20); g.lineTo(5, 2); g.strokePath();
+        g.lineStyle(4, 0xdc2626, 1);
+        g.beginPath(); g.moveTo(15, 50); g.lineTo(15, 20); g.strokePath();
+        g.lineStyle(3, 0xdc2626, 1);
+        g.beginPath(); g.moveTo(15, 20); g.lineTo(5, 2); g.strokePath();
         g.beginPath(); g.moveTo(15, 20); g.lineTo(25, 2); g.strokePath();
         g.generateTexture('snake_tongue', 30, 52);
         g.destroy();
       }
-
-      // FOOD TEXTURES
       {
         const g = this.make.graphics({ x: 0, y: 0 }, false);
         g.fillStyle(0x3b82f6, 0.3); g.fillCircle(16, 16, 16);
@@ -295,20 +331,26 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         g.destroy();
       }
 
-      // INITIALIZE SNAKE
+      // ============================================================
+      // SNAKE SETUP
+      // ============================================================
       head = this.physics.add.sprite(1500, 1500, 'snake_head');
-      head.setDepth(1000); head.setOrigin(0.5, 0.5);
+      head.setDepth(1000);
+      head.setOrigin(0.5, 0.5);
       head.setDisplaySize(HEAD_DISPLAY_W, HEAD_DISPLAY_H);
       head.setCollideWorldBounds(true);
 
       tongue = this.add.sprite(1500, 1500, 'snake_tongue');
-      tongue.setDepth(999); tongue.setOrigin(0.5, 1); tongue.setVisible(false);
+      tongue.setDepth(999);
+      tongue.setOrigin(0.5, 1);
+      tongue.setVisible(false);
 
       const spawnSegment = (scene: Phaser.Scene, x: number, y: number, depth: number, index: number, total: number) => {
         const isLast = index === total - 1;
         const key = isLast ? 'snake_tail' : 'snake_body';
         const seg = scene.add.sprite(x, y, key);
-        seg.setOrigin(0.5, 0.5); seg.setDepth(depth);
+        seg.setOrigin(0.5, 0.5);
+        seg.setDepth(depth);
         const taperStart = total - 8;
         let displaySize = SEG_DISPLAY;
         if (index > taperStart) {
@@ -323,7 +365,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         snakeBody.push(spawnSegment(this, 1500, 1500 + (i * TARGET_SPACING), 998 - i, i, 15));
       }
 
-      food = this.physics.add.sprite(0, 0, 'premium_food'); food.setDepth(5);
+      food = this.physics.add.sprite(0, 0, 'premium_food');
+      food.setDepth(5);
 
       trailEmitter = this.add.particles(0, 0, 'foodSpark', {
         scale: { start: 0.6, end: 0 }, alpha: { start: 0.5, end: 0 },
@@ -334,28 +377,35 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       spawnFood(this);
 
       this.cameras.main.startFollow(head, true, 0.08, 0.08);
-      this.cameras.main.setBounds(0, 0, 3000, 3000); this.cameras.main.setZoom(1.3);
+      this.cameras.main.setBounds(0, 0, 3000, 3000);
+      this.cameras.main.setZoom(1.3);
 
       this.physics.add.overlap(head, food, () => eatFood(this), undefined, this);
 
-      // RESTART EVENT
-      window.addEventListener('restartGame', () => {
+      // ============================================================
+      // GLOBAL LISTENERS & SCENE DESTROY HANDLERS (Fixed Leak)
+      // ============================================================
+      const handleRestartEvent = () => {
         isDead = false; score = 0; pendingGrowth = 0; tongueOffset = 0;
-        head.setPosition(1500, 1500); currentMoveAngle = -Math.PI / 2; targetJoystickAngle = -Math.PI / 2;
-        head.rotation = currentMoveAngle + VISUAL_OFFSET; head.setVisible(true);
-        head.setDisplaySize(HEAD_DISPLAY_W, HEAD_DISPLAY_H); head.clearTint();
-        snakeBody.forEach(s => s.destroy()); snakeBody = [];
+        head.setPosition(1500, 1500);
+        currentMoveAngle = -Math.PI / 2;
+        targetJoystickAngle = -Math.PI / 2;
+        head.rotation = currentMoveAngle + VISUAL_OFFSET;
+        head.setVisible(true);
+        head.setDisplaySize(HEAD_DISPLAY_W, HEAD_DISPLAY_H);
+        head.clearTint();
+        snakeBody.forEach(s => s.destroy());
+        snakeBody = [];
         for (let i = 0; i < 15; i++) {
           snakeBody.push(spawnSegment(this, 1500, 1500 + (i * TARGET_SPACING), 998 - i, i, 15));
         }
         window.dispatchEvent(new CustomEvent('updatePhaserScore', { detail: score }));
         spawnFood(this);
-      });
+      };
 
-      // POWERUPS CONFIG
-      const handlePowerupEvent = (e: any) => {
+      const handlePowerupEvent = (e: Event) => {
         if (isDead) return;
-        const type = e.detail;
+        const type = (e as CustomEvent).detail;
         let popupText = '';
         if (type === 'speed') { powerUpSpeedMult = 1.8; popupText = '⚡ SPEED BOOST!'; setTimeout(() => (powerUpSpeedMult = 1), 5000); }
         if (type === 'magnet') { magnetRange = 500; popupText = '🧲 MAGNET ACTIVE!'; setTimeout(() => (magnetRange = 150), 8000); }
@@ -369,19 +419,29 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         }).setOrigin(0.5).setDepth(3000);
         this.tweens.add({ targets: popup, y: popup.y - 100, alpha: 0, duration: 1500, onComplete: () => popup.destroy() });
       };
-      window.addEventListener('activatePowerup', handlePowerupEvent);
-      this.events.on('destroy', () => window.removeEventListener('activatePowerup', handlePowerupEvent));
 
-      // TOUCH CONTROLS
+      window.addEventListener('restartGame', handleRestartEvent);
+      window.addEventListener('activatePowerup', handlePowerupEvent);
+
+      this.events.on('destroy', () => {
+        window.removeEventListener('restartGame', handleRestartEvent);
+        window.removeEventListener('activatePowerup', handlePowerupEvent);
+      });
+
+      // ============================================================
+      // JOYSTICK CONFIGURATION
+      // ============================================================
       this.input.addPointer(2);
       joystickBase = this.add.circle(0, 0, 70, 0xffffff, 0.15).setScrollFactor(0).setDepth(3000).setVisible(false);
       joystickThumb = this.add.circle(0, 0, 35, 0xffffff, 0.4).setScrollFactor(0).setDepth(3000).setVisible(false);
+      
       this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
         if (p.x > this.cameras.main.width * 0.7 || isDead) return;
         isJoystickActive = true;
         joystickBase.setPosition(p.x, p.y).setVisible(true);
         joystickThumb.setPosition(p.x, p.y).setVisible(true);
       });
+      
       this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
         if (!isJoystickActive || !p.isDown || isDead) return;
         const angle = Phaser.Math.Angle.Between(joystickBase.x, joystickBase.y, p.x, p.y);
@@ -389,8 +449,10 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         joystickThumb.setPosition(joystickBase.x + Math.cos(angle) * dist, joystickBase.y + Math.sin(angle) * dist);
         targetJoystickAngle = angle;
       });
+      
       this.input.on('pointerup', () => {
-        isJoystickActive = false; joystickBase.setVisible(false); joystickThumb.setVisible(false);
+        isJoystickActive = false;
+        joystickBase.setVisible(false); joystickThumb.setVisible(false);
       });
     }
 
@@ -429,7 +491,10 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       }
 
       const snoutDist = HEAD_DISPLAY_H * 0.44 + tongueOffset;
-      tongue.setPosition(head.x + Math.cos(currentMoveAngle) * snoutDist, head.y + Math.sin(currentMoveAngle) * snoutDist);
+      tongue.setPosition(
+        head.x + Math.cos(currentMoveAngle) * snoutDist,
+        head.y + Math.sin(currentMoveAngle) * snoutDist,
+      );
       tongue.rotation = currentMoveAngle + VISUAL_OFFSET;
 
       const foodDist = Phaser.Math.Distance.Between(head.x, head.y, food.x, food.y);
@@ -443,9 +508,13 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       }
       if (foodDist < 30 && !isEating) eatFood(this);
 
+      // ============================================================
+      // BODY RUNTIME TRACKING & CHAIN INTERPOLATION
+      // ============================================================
       const total = snakeBody.length;
       for (let i = 0; i < total; i++) {
-        const cur = snakeBody[i]; const tgt = i === 0 ? head : snakeBody[i - 1];
+        const cur = snakeBody[i];
+        const tgt = i === 0 ? head : snakeBody[i - 1];
         const d = Phaser.Math.Distance.Between(cur.x, cur.y, tgt.x, tgt.y);
         const a = Phaser.Math.Angle.Between(cur.x, cur.y, tgt.x, tgt.y);
 
@@ -455,7 +524,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         }
         cur.rotation = a + VISUAL_OFFSET;
 
-        const taperStart = total - 8; const isLast = i === total - 1;
+        const taperStart = total - 8;
+        const isLast = i === total - 1;
         let displaySize = SEG_DISPLAY;
         if (i >= taperStart) {
           const ratio = (i - taperStart) / 8;
@@ -478,11 +548,15 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       if (pendingGrowth > 0 && time % 10 < 3) {
         const last = snakeBody[snakeBody.length - 1];
-        last.setTexture('snake_body'); last.setDisplaySize(26, 26);
+        last.setTexture('snake_body');
+        last.setDisplaySize(26, 26);
         const newTail = this.add.sprite(last.x, last.y, 'snake_tail');
-        newTail.setOrigin(0.5, 0.5); newTail.setDepth(last.depth - 1); newTail.setDisplaySize(16, 16);
+        newTail.setOrigin(0.5, 0.5);
+        newTail.setDepth(last.depth - 1);
+        newTail.setDisplaySize(16, 16);
         if (isShielded) newTail.setTint(0x60a5fa);
-        snakeBody.push(newTail); pendingGrowth--;
+        snakeBody.push(newTail);
+        pendingGrowth--;
       }
 
       if (head.x <= 20 || head.x >= 2980 || head.y <= 20 || head.y >= 2980) {
@@ -495,7 +569,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       food.setPosition(Phaser.Math.Between(200, 2800), Phaser.Math.Between(200, 2800));
       isEpicFood = Math.random() < 0.2;
       if (isEpicFood) {
-        food.setTexture('premium_food_epic'); foodTimer = 5000; food.alpha = 1; food.setDisplaySize(45, 45);
+        food.setTexture('premium_food_epic'); foodTimer = 5000; food.alpha = 1;
+        food.setDisplaySize(45, 45);
         scene.tweens.add({ targets: food, scale: 1.2, duration: 400, ease: 'Back.out' });
         sfx.playEpicSpawn();
       } else {
@@ -508,7 +583,8 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
       isEating = true; sfx.playEat();
       const points = isEpicFood ? 45 : 15;
       const popup = scene.add.text(head.x, head.y - 40, `+${points}`, {
-        fontSize: '44px', fontFamily: 'system-ui', color: '#4ade80', fontStyle: '900', stroke: '#000000', strokeThickness: 8,
+        fontSize: '44px', fontFamily: 'system-ui', color: '#4ade80',
+        fontStyle: '900', stroke: '#000000', strokeThickness: 8,
       }).setOrigin(0.5).setDepth(2500);
       scene.tweens.add({ targets: popup, y: popup.y - 120, alpha: 0, duration: 1000, ease: 'Cubic.out', onComplete: () => popup.destroy() });
       scene.tweens.add({ targets: head, scaleX: 1.25, scaleY: 0.85, duration: 80, yoyo: true });
@@ -542,10 +618,11 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
     phaserInstance.current = new Phaser.Game(config);
     return () => {
-      phaserInstance.current?.destroy(true); phaserInstance.current = null;
+      phaserInstance.current?.destroy(true);
+      phaserInstance.current = null;
       if (gameRef.current) gameRef.current.innerHTML = '';
     };
-  }, [walletAddress]);
+  }, []);
 
   return (
     <div className="fixed inset-0 w-full h-[100dvh] bg-[#06090E] z-[9999] overflow-hidden select-none touch-none">
@@ -557,17 +634,7 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
           <div className="bg-[#111722] border border-white/10 rounded-3xl p-8 w-full max-w-sm flex flex-col items-center shadow-2xl mb-6 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#84cc16] to-[#22c55e]" />
             <p className="text-gray-400 font-bold uppercase tracking-widest text-xs mb-1 mt-2">Total Yield</p>
-            <p className="text-6xl font-black text-[#4ade80] mb-3 drop-shadow-md">{gameOverData.score}</p>
-            
-            {/* Real-time score sync reporting badge */}
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-6">
-              {isSavingScore ? (
-                <span className="text-yellow-500 animate-pulse">Saving score to contract...</span>
-              ) : (
-                <span className="text-emerald-500">Score sync complete</span>
-              )}
-            </p>
-
+            <p className="text-6xl font-black text-[#4ade80] mb-8 drop-shadow-md">{gameOverData.score}</p>
             <div className="w-full flex justify-between px-6 pb-2">
               <div className="flex flex-col items-center">
                 <p className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-1">Kills</p>
@@ -579,21 +646,9 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
               </div>
             </div>
           </div>
-          
           <div className="flex flex-col gap-3 w-full max-w-sm">
-            <button 
-              onClick={handlePlayAgain} 
-              disabled={isSavingScore}
-              className="w-full bg-gradient-to-b from-[#a3e635] to-[#65a30d] disabled:from-gray-700 disabled:to-gray-800 disabled:text-gray-500 disabled:shadow-none text-black rounded-xl py-4 font-black text-lg shadow-[0_4px_0_#3f6212] active:shadow-none active:translate-y-1 transition-all uppercase tracking-wider"
-            >
-              PLAY AGAIN
-            </button>
-            <button 
-              onClick={() => onGameOverRef.current?.(gameOverData.score)} 
-              className="w-full bg-[#1A1F2E] border border-white/10 text-white rounded-xl py-4 font-black text-sm active:bg-white/5 transition-all uppercase tracking-wider"
-            >
-              RETURN HOME
-            </button>
+            <button onClick={handlePlayAgain} className="w-full bg-gradient-to-b from-[#a3e635] to-[#65a30d] text-black rounded-xl py-4 font-black text-lg shadow-[0_4px_0_#3f6212] active:shadow-none active:translate-y-1 transition-all uppercase tracking-wider">PLAY AGAIN</button>
+            <button onClick={() => onGameOverRef.current?.(gameOverData.score)} className="w-full bg-[#1A1F2E] border border-white/10 text-white rounded-xl py-4 font-black text-sm active:bg-white/5 transition-all uppercase tracking-wider">RETURN HOME</button>
           </div>
         </div>
       )}
