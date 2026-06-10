@@ -5,9 +5,10 @@ import { supabase } from '@/lib/supabaseClient';
 
 interface ProfileSidebarProps {
   accountAddress?: string;
+  refreshProfile?: () => Promise<void> | void; // Accepts the parent refresh hook
 }
 
-export default function ProfileSidebar({ accountAddress }: ProfileSidebarProps) {
+export default function ProfileSidebar({ accountAddress, refreshProfile }: ProfileSidebarProps) {
   const [profile, setProfile] = useState<any>(null);
   const [clanInfo, setClanInfo] = useState<{ name: string; tag: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -83,7 +84,14 @@ export default function ProfileSidebar({ accountAddress }: ProfileSidebarProps) 
         .eq('wallet_address', accountAddress.toLowerCase());
 
       if (error) throw error;
+      
       setProfile({ ...profile, username: editName.trim() });
+      
+      // Notify parent app of updated username profile context
+      if (refreshProfile) {
+        await refreshProfile();
+      }
+      
       setIsEditing(false);
     } catch (error: any) {
       alert(
@@ -114,6 +122,11 @@ export default function ProfileSidebar({ accountAddress }: ProfileSidebarProps) 
       console.error("Sound toggle save failed:", error.message);
       // Revert optimistic update
       setProfile({ ...profile, sound_enabled: !newSoundState });
+    } else {
+      // Sync configurations with application state tree
+      if (refreshProfile) {
+        await refreshProfile();
+      }
     }
   };
 
@@ -238,7 +251,6 @@ export default function ProfileSidebar({ accountAddress }: ProfileSidebarProps) 
         <div className="flex items-center justify-between py-2 mt-2">
           <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">Network Gateway</span>
           <span className="text-[9px] bg-green-500/10 text-green-400 px-2.5 py-1 rounded-lg font-black uppercase tracking-wider flex items-center gap-1">
-            {/* FIX 4: Removed stray Chinese character '尊' that was breaking Tailwind class parsing */}
             <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
             Celo Mainnet
           </span>
