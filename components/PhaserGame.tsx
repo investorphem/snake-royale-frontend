@@ -83,24 +83,25 @@ class AudioSynth {
 }
 const sfx = new AudioSynth();
 
-interface PhaserGameProps {
-  walletAddress?: string;
-  onGameOver?: (score: number) => void;
-}
-
-// Master interface matching your Database columns
-interface UserDatabaseSettings {
+// FIX 2: Added onSettingsChange prop to sync with parent dashboard
+export interface UserDatabaseSettings {
   username: string;
   selectedSkin: string;
   audioEnabled: boolean;
   inventory: { speed: number; shield: number; magnet: number };
 }
 
-export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProps) {
+interface PhaserGameProps {
+  walletAddress?: string;
+  onGameOver?: (score: number) => void;
+  onSettingsChange?: (newSettings: UserDatabaseSettings) => void; // Pass changes up
+}
+
+export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange }: PhaserGameProps) {
   const gameRef = useRef<HTMLDivElement>(null);
   const phaserInstance = useRef<Phaser.Game | null>(null);
   const onGameOverRef = useRef(onGameOver);
-  
+
   const [currentScore, setCurrentScore] = useState(0);
   const [currentKills, setCurrentKills] = useState(0);
   const [gameOverData, setGameOverData] = useState<{ score: number; kills: number } | null>(null);
@@ -140,12 +141,16 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         const response = await fetch(`/api/user/profile?wallet=${walletAddress}`);
         if (response.ok) {
           const data = await response.json();
-          setDbSettings({
+          const loadedSettings = {
             username: data.username || 'Player',
             selectedSkin: data.skin || 'default',
             audioEnabled: data.audio_enabled !== undefined ? data.audio_enabled : true,
             inventory: data.inventory || { speed: 3, shield: 2, magnet: 3 }
-          });
+          };
+          setDbSettings(loadedSettings);
+          
+          // Inform parent of loaded settings
+          if (onSettingsChange) onSettingsChange(loadedSettings);
         }
       } catch (error) {
         console.error("Failed to fetch user data from database:", error);
@@ -158,12 +163,14 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
   }, [walletAddress]);
 
   // ============================================================
-  // 2. SAVE INDIVIDUAL SETTINGS TO DATABASE
+  // 2. SAVE INDIVIDUAL SETTINGS TO DATABASE & DASHBOARD
   // ============================================================
   const updateSettingInDatabase = async (newSettings: Partial<UserDatabaseSettings>) => {
     if (!walletAddress) return;
     const updatedState = { ...dbSettings, ...newSettings };
+    
     setDbSettings(updatedState);
+    if (onSettingsChange) onSettingsChange(updatedState); // Inform Parent Dashboard!
 
     try {
       await fetch('/api/user/save-settings', {
@@ -280,28 +287,28 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
         g.fillStyle(0xef4444, 1); g.fillCircle(50, 34, 5);
         g.fillStyle(0x93c5fd, 1); g.fillCircle(28, 35, 3);
         g.fillStyle(0x6ee7b7, 1); g.fillCircle(72, 35, 3);
-        
+
         g.fillStyle(primaryColor, 1); g.fillEllipse(50, 80, 76, 74);
         g.fillStyle(secondaryColor, 1); g.fillEllipse(50, 80, 68, 66);
         g.fillStyle(0xffffff, 0.4); g.fillEllipse(50, 66, 44, 26); // shine
-        
+
         g.fillStyle(0xffffff, 1); g.fillCircle(30, 72, 13);
         g.fillStyle(primaryColor, 1); g.fillCircle(30, 70, 9);
         g.fillStyle(0x000000, 1); g.fillCircle(30, 69, 5);
         g.fillStyle(0xffffff, 1); g.fillCircle(27, 66, 2.5);
-        
+
         g.fillStyle(0xffffff, 1); g.fillCircle(70, 72, 13);
         g.fillStyle(primaryColor, 1); g.fillCircle(70, 70, 9);
         g.fillStyle(0x000000, 1); g.fillCircle(70, 69, 5);
         g.fillStyle(0xffffff, 1); g.fillCircle(67, 66, 2.5);
-        
+
         g.lineStyle(3, primaryColor, 1);
         g.beginPath(); g.arc(30, 72, 14, Math.PI * 1.25, Math.PI * 1.75); g.strokePath();
         g.beginPath(); g.arc(70, 72, 14, Math.PI * 1.25, Math.PI * 1.75); g.strokePath();
-        
+
         g.fillStyle(primaryColor, 1); g.fillEllipse(50, 98, 36, 22);
         g.fillStyle(0x000000, 0.5); g.fillCircle(42, 96, 3.5); g.fillCircle(58, 96, 3.5);
-        
+
         g.lineStyle(3, primaryColor, 1); g.beginPath();
         g.moveTo(34, 104); g.lineTo(40, 108); g.lineTo(50, 110); g.lineTo(60, 108); g.lineTo(66, 104);
         g.strokePath();
@@ -408,8 +415,16 @@ export default function PhaserGame({ walletAddress, onGameOver }: PhaserGameProp
 
       spawnFood(this);
 
+      // FIX 1: Mobile Zoom & Background Scale Fixes
+      const isMobile = this.scale.width < 600;
+      
       this.cameras.main.startFollow(head, true, 0.08, 0.08);
-      this.cameras.main.setBounds(0, 0, 3000, 3000); this.cameras.main.setZoom(1.3);
+      this.cameras.main.setBounds(0, 0, 3000, 3000); 
+      // Set to a lower zoom if the screen is narrow (mobile)
+      this.cameras.main.setZoom(isMobile ? 0.75 : 1.3);
+
+      // Adjust the grid pattern scale to match the new zoom level
+      grid.setTileScale(isMobile ? 0.7 : 1.0);
 
       this.physics.add.overlap(head, food, () => eatFood(this), undefined, this);
 
