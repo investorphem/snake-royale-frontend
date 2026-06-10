@@ -13,7 +13,9 @@ import Inventory from "@/components/Inventory";
 import Clans from "@/components/Clans";
 import Tournament from "@/components/Tournament";
 
-// Client definition utilizing environment configuration exclusively
+// ============================================================
+// FIX 1: clientId must come ONLY from env — never hardcoded.
+// ============================================================
 const client = createThirdwebClient({
   clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID!,
 });
@@ -56,14 +58,10 @@ function SnakeRoyaleApp() {
   const [isOnboardingSaving, setIsOnboardingSaving] = useState(false);
   const [playerProfile, setPlayerProfile]           = useState<any>(null);
 
+  // ============================================================
+  // FIX 2: Track which wallet address we already fetched for.
+  // ============================================================
   const fetchedForAddress = useRef<string | null>(null);
-
-  // Sync state cleanly when tabs are switched globally
-  useEffect(() => {
-    if (activeTab !== 'home') {
-      setAppState('menu');
-    }
-  }, [activeTab]);
 
   useEffect(() => {
     if (!account?.address) {
@@ -86,6 +84,9 @@ function SnakeRoyaleApp() {
           .eq('wallet_address', lowerAddress)
           .maybeSingle();
 
+        // ============================================================
+        // FIX 3: Log the error to debug Supabase RLS policies
+        // ============================================================
         if (error) {
           console.error("Supabase profile fetch error:", error.message);
           return;
@@ -135,6 +136,9 @@ function SnakeRoyaleApp() {
     }
   };
 
+  // ============================================================
+  // FIX 4: Expose a refreshProfile function for child views
+  // ============================================================
   const refreshProfile = async () => {
     if (!account?.address) return;
     const lowerAddress = account.address.toLowerCase();
@@ -169,9 +173,7 @@ function SnakeRoyaleApp() {
     setIsFetchingRooms(false);
   };
 
-  useEffect(() => { 
-    if (appState === 'join') fetchLiveRooms(); 
-  }, [appState]);
+  useEffect(() => { if (appState === 'join') fetchLiveRooms(); }, [appState]);
 
   const handleCreateRoom = async () => {
     if (!account) return alert("Wallet not connected");
@@ -249,10 +251,10 @@ function SnakeRoyaleApp() {
         <MiniPayNav selectedCoin={selectedCoin} setSelectedCoin={setSelectedCoin} />
       </nav>
 
-      {/* CONTENT INTERFACE */}
+      {/* CONTENT */}
       <div className="pt-24 pb-32 px-4 w-full max-w-md mx-auto flex-1 flex flex-col">
-        {activeTab === 'shop'       && <Shop selectedCoin={selectedCoin} refreshProfile={refreshProfile} />}
-        {activeTab === 'inventory'  && <Inventory refreshProfile={refreshProfile} />}
+        {activeTab === 'shop'       && <Shop selectedCoin={selectedCoin} />}
+        {activeTab === 'inventory'  && <Inventory />}
         {activeTab === 'clans'      && <Clans />}
         {activeTab === 'tournament' && <Tournament />}
         {activeTab === 'profile'    && <ProfileSidebar accountAddress={account?.address} refreshProfile={refreshProfile} />}
@@ -278,24 +280,25 @@ function SnakeRoyaleApp() {
                         <span className="text-yellow-400 text-5xl drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">ROYALE</span>
                       </h1>
                     </div>
-                    
                     <div className="flex flex-col gap-3 w-full">
-                      {/* ACTION CONTROLS MATCHING UI FLOW */}
-                      <button onClick={() => setAppState('playing')} className="w-full bg-gradient-to-b from-[#a3e635] to-[#65a30d] text-black rounded-2xl py-4 font-black text-2xl shadow-[0_6px_0_#3f6212] active:shadow-none active:translate-y-1.5 transition-all flex flex-col items-center uppercase tracking-wide">
-                        PLAY QUICK MATCH
+                      <button onClick={() => setAppState('playing')} className="w-full bg-gradient-to-b from-[#a3e635] to-[#65a30d] text-black rounded-2xl py-4 font-black text-2xl shadow-[0_6px_0_#3f6212] active:shadow-[0_0px_0_#3f6212] active:translate-y-1.5 transition-all flex flex-col items-center">
+                        PLAY
+                        <span className="text-xs font-bold text-black/70 mt-0.5">Quick Match</span>
                       </button>
                       
-                      <button onClick={() => setAppState('create')} className="w-full bg-[#1A1F2E] text-white rounded-2xl py-4 font-black text-sm shadow-[0_6px_0_#0B0F17] active:shadow-none active:translate-y-1.5 transition-all uppercase tracking-widest mt-1 border border-white/5">
-                        HOST ARENA
-                      </button>
+                      {/* SPLIT OPTIONS FOR PROPERLY ACCESSING ROOM STATES */}
+                      <div className="grid grid-cols-2 gap-3 w-full mt-1">
+                        <button onClick={() => setAppState('create')} className="w-full bg-[#1A1F2E] text-white rounded-2xl py-4 font-black text-xs shadow-[0_6px_0_#0B0F17] active:shadow-[0_0px_0_#0B0F17] active:translate-y-1.5 transition-all uppercase tracking-widest border border-white/5">
+                          HOST MATCH
+                        </button>
+                        <button onClick={() => setAppState('join')} className="w-full bg-[#1A1F2E] text-white rounded-2xl py-4 font-black text-xs shadow-[0_6px_0_#0B0F17] active:shadow-[0_0px_0_#0B0F17] active:translate-y-1.5 transition-all uppercase tracking-widest border border-white/5">
+                          JOIN MATCH
+                        </button>
+                      </div>
 
-                      <button onClick={() => setAppState('join')} className="w-full bg-[#1A1F2E] text-white rounded-2xl py-4 font-black text-sm shadow-[0_6px_0_#0B0F17] active:shadow-none active:translate-y-1.5 transition-all uppercase tracking-widest mt-1 border border-white/5">
-                        JOIN ARENA
-                      </button>
-
-                      <div className="grid grid-cols-2 gap-3 w-full mt-2">
-                        <button onClick={() => setActiveTab('tournament')} className="w-full bg-[#111722] hover:bg-[#1A1F2E] text-gray-400 hover:text-white rounded-xl py-3 font-bold text-xs border border-white/5 transition-all uppercase tracking-wider">LEADERBOARD</button>
-                        <button onClick={() => setActiveTab('clans')} className="w-full bg-[#111722] hover:bg-[#1A1F2E] text-gray-400 hover:text-white rounded-xl py-3 font-bold text-xs border border-white/5 transition-all uppercase tracking-wider">MISSIONS</button>
+                      <div className="grid grid-cols-2 gap-3 w-full mt-1">
+                        <button onClick={() => setActiveTab('tournament')} className="w-full bg-[#1A1F2E] text-white rounded-2xl py-4 font-black text-xs shadow-[0_6px_0_#0B0F17] active:shadow-[0_0px_0_#0B0F17] active:translate-y-1.5 transition-all uppercase tracking-widest border border-white/5">LEADERBOARD</button>
+                        <button onClick={() => setActiveTab('clans')} className="w-full bg-[#1A1F2E] text-white rounded-2xl py-4 font-black text-xs shadow-[0_6px_0_#0B0F17] active:shadow-[0_0px_0_#0B0F17] active:translate-y-1.5 transition-all uppercase tracking-widest border border-white/5">MISSIONS</button>
                       </div>
                     </div>
                   </div>
@@ -355,7 +358,7 @@ function SnakeRoyaleApp() {
 
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* ONBOARDING SECURITY GATE */}
+      {/* ONBOARDING MODAL */}
       {showOnboarding && (
         <div className="fixed inset-0 bg-[#06090E]/95 backdrop-blur-xl flex items-center justify-center p-4 z-[9999] animate-fade-in">
           <div className="bg-[#111722] border border-white/10 w-full max-w-sm rounded-3xl p-6 shadow-2xl text-center relative overflow-hidden">
@@ -389,6 +392,9 @@ function SnakeRoyaleApp() {
   );
 }
 
+// ============================================================
+// HEADER — WALLET & COIN SELECTOR
+// ============================================================
 function MiniPayNav({ selectedCoin, setSelectedCoin }: { selectedCoin: any; setSelectedCoin: any }) {
   const account = useActiveAccount();
   const [mounted, setMounted]         = useState(false);
@@ -429,6 +435,10 @@ function MiniPayNav({ selectedCoin, setSelectedCoin }: { selectedCoin: any; setS
   );
 }
 
+// ============================================================
+// TOKEN BALANCE BADGE
+// FIX 5 & 6: Safe BigInt computation preventing truncation
+// ============================================================
 function TokenBadge({ token, accountAddress }: { token: any; accountAddress: string }) {
   const contract = getContract({ client, chain: mainnetChain, address: token.address });
 
@@ -445,11 +455,14 @@ function TokenBadge({ token, accountAddress }: { token: any; accountAddress: str
   const formattedBalance = (() => {
     if (!data) return "0.00";
     try {
-      if (token.decimals === 18) {
-        const whole = data / BigInt(10 ** 14);
-        return (Number(whole) / 10000).toFixed(2);
+      const decimals = BigInt(token.decimals);
+      if (decimals > 6n) {
+        // Keep 4 decimals of integer precision before float division to avoid structural zero truncation
+        const precision = 4n;
+        const divisor = 10n ** (decimals - precision);
+        return (Number(data / divisor) / Math.pow(10, Number(precision))).toFixed(2);
       } else {
-        return (Number(data) / Math.pow(10, token.decimals)).toFixed(2);
+        return (Number(data) / Math.pow(10, Number(decimals))).toFixed(2);
       }
     } catch {
       return "0.00";
