@@ -13,11 +13,7 @@ import Inventory from "@/components/Inventory";
 import Clans from "@/components/Clans";
 import Tournament from "@/components/Tournament";
 
-// ============================================================
-// FIX 1: clientId must come ONLY from env — never hardcoded.
-// A wrong/garbled clientId causes Thirdweb to silently fail all
-// RPC calls, which is why balances always return 0.
-// ============================================================
+// Client definition utilizing environment configuration exclusively
 const client = createThirdwebClient({
   clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID!,
 });
@@ -60,12 +56,14 @@ function SnakeRoyaleApp() {
   const [isOnboardingSaving, setIsOnboardingSaving] = useState(false);
   const [playerProfile, setPlayerProfile]           = useState<any>(null);
 
-  // ============================================================
-  // FIX 2: Track which wallet address we already fetched for.
-  // This prevents re-fetching (and overwriting state) every time
-  // activeTab or appState changes — which caused settings to revert.
-  // ============================================================
   const fetchedForAddress = useRef<string | null>(null);
+
+  // Sync state cleanly when tabs are switched globally
+  useEffect(() => {
+    if (activeTab !== 'home') {
+      setAppState('menu');
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (!account?.address) {
@@ -75,7 +73,6 @@ function SnakeRoyaleApp() {
       return;
     }
 
-    // Only fetch once per wallet address — not on every tab/state change
     if (fetchedForAddress.current === account.address.toLowerCase()) return;
 
     const lowerAddress = account.address.toLowerCase();
@@ -89,13 +86,8 @@ function SnakeRoyaleApp() {
           .eq('wallet_address', lowerAddress)
           .maybeSingle();
 
-        // ============================================================
-        // FIX 3: Log the error so you can actually see Supabase RLS
-        // issues instead of silently showing onboarding every time.
-        // ============================================================
         if (error) {
           console.error("Supabase profile fetch error:", error.message);
-          // Don't show onboarding on a read error — could be RLS/network
           return;
         }
 
@@ -111,7 +103,7 @@ function SnakeRoyaleApp() {
     };
 
     fetchProfile();
-  }, [account?.address]); // ← ONLY re-run when the wallet address actually changes
+  }, [account?.address]);
 
   const handleCreateOnboardingAccount = async () => {
     if (!account?.address || !chosenUsername.trim()) return;
@@ -125,7 +117,7 @@ function SnakeRoyaleApp() {
         .from('players')
         .upsert(
           { wallet_address: lowerAddress, username: chosenUsername.trim(), xp: 0 },
-          { onConflict: 'wallet_address' } // ← prevents duplicate inserts
+          { onConflict: 'wallet_address' }
         )
         .select()
         .single();
@@ -136,19 +128,13 @@ function SnakeRoyaleApp() {
       setShowOnboarding(false);
     } catch (err: any) {
       console.error("Onboarding save error:", err);
-      alert(`Failed to save username: ${err.message || 'Check Supabase RLS policies (insert must be allowed).'}`);
+      alert(`Failed to save username: ${err.message || 'Check Supabase RLS policies.'}`);
     } finally {
       setIsOnboardingSaving(false);
       setTxStatus('');
     }
   };
 
-  // ============================================================
-  // FIX 4: Expose a refreshProfile function so child components
-  // (ProfileSidebar, Shop, etc.) can trigger a re-fetch after
-  // saving settings without causing the infinite re-fetch loop.
-  // Pass this down as a prop where needed.
-  // ============================================================
   const refreshProfile = async () => {
     if (!account?.address) return;
     const lowerAddress = account.address.toLowerCase();
@@ -183,7 +169,9 @@ function SnakeRoyaleApp() {
     setIsFetchingRooms(false);
   };
 
-  useEffect(() => { if (appState === 'join') fetchLiveRooms(); }, [appState]);
+  useEffect(() => { 
+    if (appState === 'join') fetchLiveRooms(); 
+  }, [appState]);
 
   const handleCreateRoom = async () => {
     if (!account) return alert("Wallet not connected");
@@ -261,13 +249,13 @@ function SnakeRoyaleApp() {
         <MiniPayNav selectedCoin={selectedCoin} setSelectedCoin={setSelectedCoin} />
       </nav>
 
-      {/* CONTENT */}
+      {/* CONTENT INTERFACE */}
       <div className="pt-24 pb-32 px-4 w-full max-w-md mx-auto flex-1 flex flex-col">
-        {activeTab === 'shop'       && <Shop selectedCoin={selectedCoin} />}
-        {activeTab === 'inventory'  && <Inventory />}
+        {activeTab === 'shop'       && <Shop selectedCoin={selectedCoin} refreshProfile={refreshProfile} />}
+        {activeTab === 'inventory'  && <Inventory refreshProfile={refreshProfile} />}
         {activeTab === 'clans'      && <Clans />}
         {activeTab === 'tournament' && <Tournament />}
-        {activeTab === 'profile'    && <ProfileSidebar accountAddress={account?.address} />}
+        {activeTab === 'profile'    && <ProfileSidebar accountAddress={account?.address} refreshProfile={refreshProfile} />}
 
         {activeTab === 'home' && (
           <>
@@ -290,17 +278,24 @@ function SnakeRoyaleApp() {
                         <span className="text-yellow-400 text-5xl drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]">ROYALE</span>
                       </h1>
                     </div>
+                    
                     <div className="flex flex-col gap-3 w-full">
-                      <button onClick={() => setAppState('playing')} className="w-full bg-gradient-to-b from-[#a3e635] to-[#65a30d] text-black rounded-2xl py-4 font-black text-2xl shadow-[0_6px_0_#3f6212] active:shadow-[0_0px_0_#3f6212] active:translate-y-1.5 transition-all flex flex-col items-center">
-                        PLAY
-                        <span className="text-xs font-bold text-black/70 mt-0.5">Quick Match</span>
+                      {/* ACTION CONTROLS MATCHING UI FLOW */}
+                      <button onClick={() => setAppState('playing')} className="w-full bg-gradient-to-b from-[#a3e635] to-[#65a30d] text-black rounded-2xl py-4 font-black text-2xl shadow-[0_6px_0_#3f6212] active:shadow-none active:translate-y-1.5 transition-all flex flex-col items-center uppercase tracking-wide">
+                        PLAY QUICK MATCH
                       </button>
-                      <button onClick={() => setAppState('create')} className="w-full bg-[#1A1F2E] text-white rounded-2xl py-4 font-black text-sm shadow-[0_6px_0_#0B0F17] active:shadow-[0_0px_0_#0B0F17] active:translate-y-1.5 transition-all uppercase tracking-widest mt-2 border border-white/5">
-                        PLAY WITH FRIENDS
+                      
+                      <button onClick={() => setAppState('create')} className="w-full bg-[#1A1F2E] text-white rounded-2xl py-4 font-black text-sm shadow-[0_6px_0_#0B0F17] active:shadow-none active:translate-y-1.5 transition-all uppercase tracking-widest mt-1 border border-white/5">
+                        HOST ARENA
                       </button>
+
+                      <button onClick={() => setAppState('join')} className="w-full bg-[#1A1F2E] text-white rounded-2xl py-4 font-black text-sm shadow-[0_6px_0_#0B0F17] active:shadow-none active:translate-y-1.5 transition-all uppercase tracking-widest mt-1 border border-white/5">
+                        JOIN ARENA
+                      </button>
+
                       <div className="grid grid-cols-2 gap-3 w-full mt-2">
-                        <button onClick={() => setActiveTab('tournament')} className="w-full bg-[#1A1F2E] text-white rounded-2xl py-4 font-black text-xs shadow-[0_6px_0_#0B0F17] active:shadow-[0_0px_0_#0B0F17] active:translate-y-1.5 transition-all uppercase tracking-widest border border-white/5">LEADERBOARD</button>
-                        <button onClick={() => setActiveTab('clans')} className="w-full bg-[#1A1F2E] text-white rounded-2xl py-4 font-black text-xs shadow-[0_6px_0_#0B0F17] active:shadow-[0_0px_0_#0B0F17] active:translate-y-1.5 transition-all uppercase tracking-widest border border-white/5">MISSIONS</button>
+                        <button onClick={() => setActiveTab('tournament')} className="w-full bg-[#111722] hover:bg-[#1A1F2E] text-gray-400 hover:text-white rounded-xl py-3 font-bold text-xs border border-white/5 transition-all uppercase tracking-wider">LEADERBOARD</button>
+                        <button onClick={() => setActiveTab('clans')} className="w-full bg-[#111722] hover:bg-[#1A1F2E] text-gray-400 hover:text-white rounded-xl py-3 font-bold text-xs border border-white/5 transition-all uppercase tracking-wider">MISSIONS</button>
                       </div>
                     </div>
                   </div>
@@ -360,7 +355,7 @@ function SnakeRoyaleApp() {
 
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* ONBOARDING MODAL */}
+      {/* ONBOARDING SECURITY GATE */}
       {showOnboarding && (
         <div className="fixed inset-0 bg-[#06090E]/95 backdrop-blur-xl flex items-center justify-center p-4 z-[9999] animate-fade-in">
           <div className="bg-[#111722] border border-white/10 w-full max-w-sm rounded-3xl p-6 shadow-2xl text-center relative overflow-hidden">
@@ -394,9 +389,6 @@ function SnakeRoyaleApp() {
   );
 }
 
-// ============================================================
-// HEADER — WALLET & COIN SELECTOR
-// ============================================================
 function MiniPayNav({ selectedCoin, setSelectedCoin }: { selectedCoin: any; setSelectedCoin: any }) {
   const account = useActiveAccount();
   const [mounted, setMounted]         = useState(false);
@@ -437,11 +429,6 @@ function MiniPayNav({ selectedCoin, setSelectedCoin }: { selectedCoin: any; setS
   );
 }
 
-// ============================================================
-// TOKEN BALANCE BADGE
-// FIX 5: Use checksummed address and handle BigInt conversion
-// carefully for both 18-decimal and 6-decimal tokens.
-// ============================================================
 function TokenBadge({ token, accountAddress }: { token: any; accountAddress: string }) {
   const contract = getContract({ client, chain: mainnetChain, address: token.address });
 
@@ -451,24 +438,17 @@ function TokenBadge({ token, accountAddress }: { token: any; accountAddress: str
     params: [accountAddress],
   });
 
-  // Log errors so you can see if Thirdweb RPC calls are failing
   useEffect(() => {
     if (error) console.error(`Balance fetch error for ${token.symbol}:`, error);
   }, [error, token.symbol]);
 
-  // ============================================================
-  // FIX 6: Safe BigInt → number conversion.
-  // For 18-decimal tokens, Number(BigInt) overflows — divide first.
-  // ============================================================
   const formattedBalance = (() => {
     if (!data) return "0.00";
     try {
       if (token.decimals === 18) {
-        // Divide BigInt down to avoid float overflow
-        const whole = data / BigInt(10 ** 14); // gives 4 extra decimal places
+        const whole = data / BigInt(10 ** 14);
         return (Number(whole) / 10000).toFixed(2);
       } else {
-        // 6-decimal tokens (USDC, USDT) are safe to convert directly
         return (Number(data) / Math.pow(10, token.decimals)).toFixed(2);
       }
     } catch {
