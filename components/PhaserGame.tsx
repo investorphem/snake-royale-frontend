@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import * as Phaser from 'phaser';
 
 // ============================================================
-// AUDIO SYNTH (Respects Database Audio Setting)
+// AUDIO SYNTH
 // ============================================================
 class AudioSynth {
   private ctx: AudioContext | null = null;
-  public enabled: boolean = true; // Controlled by database
+  public enabled: boolean = true;
 
   private init() {
     if (!this.ctx && typeof window !== 'undefined') {
@@ -20,28 +20,19 @@ class AudioSynth {
   playHiss() {
     if (!this.enabled) return;
     this.init(); const ctx = this.ctx; if (!ctx) return;
-    const bufferSize = ctx.sampleRate * 0.3;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const bufferSize = ctx.sampleRate * 0.3; const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
     const noise = ctx.createBufferSource(); noise.buffer = buffer;
-    const bandpass = ctx.createBiquadFilter(); bandpass.type = 'bandpass';
-    bandpass.frequency.value = 4000; bandpass.Q.value = 1.0;
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+    const bandpass = ctx.createBiquadFilter(); bandpass.type = 'bandpass'; bandpass.frequency.value = 4000; bandpass.Q.value = 1.0;
+    const gain = ctx.createGain(); gain.gain.setValueAtTime(0, ctx.currentTime); gain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
     noise.connect(bandpass); bandpass.connect(gain); gain.connect(ctx.destination); noise.start();
   }
   playEat() {
     if (!this.enabled) return;
     this.init(); const ctx = this.ctx; if (!ctx) return;
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+    const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
     osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.1);
   }
   playEpicSpawn() {
@@ -49,41 +40,30 @@ class AudioSynth {
     this.init(); const ctx = this.ctx; if (!ctx) return;
     const now = ctx.currentTime;
     [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
-      const osc = ctx.createOscillator(); const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, now + i * 0.04);
-      gain.gain.setValueAtTime(0.15, now + i * 0.04);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start(now + i * 0.04); osc.stop(now + 0.4);
+      const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + i * 0.04); gain.gain.setValueAtTime(0.15, now + i * 0.04); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc.connect(gain); gain.connect(ctx.destination); osc.start(now + i * 0.04); osc.stop(now + 0.4);
     });
   }
   playDie() {
     if (!this.enabled) return;
     this.init(); const ctx = this.ctx; if (!ctx) return;
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(150, ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(40, ctx.currentTime + 0.4);
-    gain.gain.setValueAtTime(0.4, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(150, ctx.currentTime); osc.frequency.linearRampToValueAtTime(40, ctx.currentTime + 0.4);
+    gain.gain.setValueAtTime(0.4, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
     osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.4);
   }
   playPowerup() {
     if (!this.enabled) return;
     this.init(); const ctx = this.ctx; if (!ctx) return;
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(400, ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.3);
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+    const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.type = 'square';
+    osc.frequency.setValueAtTime(400, ctx.currentTime); osc.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
     osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.3);
   }
 }
 const sfx = new AudioSynth();
 
-// FIX 2: Added onSettingsChange prop to sync with parent dashboard
 export interface UserDatabaseSettings {
   username: string;
   selectedSkin: string;
@@ -94,7 +74,7 @@ export interface UserDatabaseSettings {
 interface PhaserGameProps {
   walletAddress?: string;
   onGameOver?: (score: number) => void;
-  onSettingsChange?: (newSettings: UserDatabaseSettings) => void; // Pass changes up
+  onSettingsChange?: (newSettings: UserDatabaseSettings) => void;
 }
 
 export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange }: PhaserGameProps) {
@@ -106,9 +86,6 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
   const [currentKills, setCurrentKills] = useState(0);
   const [gameOverData, setGameOverData] = useState<{ score: number; kills: number } | null>(null);
 
-  // ============================================================
-  // MASTER DATABASE STATE
-  // ============================================================
   const [dbSettings, setDbSettings] = useState<UserDatabaseSettings>({
     username: 'Player',
     selectedSkin: 'default',
@@ -121,21 +98,10 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
   const [tempUsername, setTempUsername] = useState('');
 
   useEffect(() => { onGameOverRef.current = onGameOver; }, [onGameOver]);
+  useEffect(() => { sfx.enabled = dbSettings.audioEnabled; }, [dbSettings.audioEnabled]);
 
-  // Keep audio synth in sync with database setting
   useEffect(() => {
-    sfx.enabled = dbSettings.audioEnabled;
-  }, [dbSettings.audioEnabled]);
-
-  // ============================================================
-  // 1. FETCH ALL SETTINGS FROM DATABASE ON MOUNT
-  // ============================================================
-  useEffect(() => {
-    if (!walletAddress) {
-      setIsLoading(false);
-      return;
-    }
-
+    if (!walletAddress) { setIsLoading(false); return; }
     const fetchUserData = async () => {
       try {
         const response = await fetch(`/api/user/profile?wallet=${walletAddress}`);
@@ -148,29 +114,22 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
             inventory: data.inventory || { speed: 3, shield: 2, magnet: 3 }
           };
           setDbSettings(loadedSettings);
-          
-          // Inform parent of loaded settings
           if (onSettingsChange) onSettingsChange(loadedSettings);
         }
       } catch (error) {
-        console.error("Failed to fetch user data from database:", error);
+        console.error("Failed to fetch user data:", error);
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchUserData();
   }, [walletAddress]);
 
-  // ============================================================
-  // 2. SAVE INDIVIDUAL SETTINGS TO DATABASE & DASHBOARD
-  // ============================================================
   const updateSettingInDatabase = async (newSettings: Partial<UserDatabaseSettings>) => {
     if (!walletAddress) return;
     const updatedState = { ...dbSettings, ...newSettings };
-    
     setDbSettings(updatedState);
-    if (onSettingsChange) onSettingsChange(updatedState); // Inform Parent Dashboard!
+    if (onSettingsChange) onSettingsChange(updatedState);
 
     try {
       await fetch('/api/user/save-settings', {
@@ -178,17 +137,12 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ walletAddress, ...updatedState }),
       });
-      console.log("Database synced successfully:", updatedState);
     } catch (error) {
-      console.error("Failed to save changes to database:", error);
+      console.error("Failed to save changes:", error);
     }
   };
 
-  // UI Handlers
-  const handleSaveUsername = () => {
-    setIsEditingUsername(false);
-    updateSettingInDatabase({ username: tempUsername });
-  };
+  const handleSaveUsername = () => { setIsEditingUsername(false); updateSettingInDatabase({ username: tempUsername }); };
   const toggleAudio = () => updateSettingInDatabase({ audioEnabled: !dbSettings.audioEnabled });
   const changeSkin = (skinName: string) => updateSettingInDatabase({ selectedSkin: skinName });
 
@@ -219,17 +173,22 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
   };
 
   // ============================================================
-  // PHASER GAME ENGINE (Re-runs when selectedSkin changes)
+  // PHASER GAME ENGINE - "PREMIUM" SLITHER UPDATE
   // ============================================================
   useEffect(() => {
     if (!gameRef.current || phaserInstance.current || isLoading) return;
 
-    const BASE_SPEED = 220;
-    const HEAD_CANVAS_W = 100; const HEAD_CANVAS_H = 120;
-    const HEAD_DISPLAY_W = 90; const HEAD_DISPLAY_H = 110;
-    const BODY_CANVAS = 64; const SEG_DISPLAY = 68;
-    const TARGET_SPACING = 20; const COLLISION_RADIUS = 24;
+    const BASE_SPEED = 240;
+    const BODY_CANVAS = 80; const SEG_DISPLAY = 60;
+    const HEAD_CANVAS_W = 110; const HEAD_CANVAS_H = 130;
+    const HEAD_DISPLAY_W = 85; const HEAD_DISPLAY_H = 100;
+    
+    // VISUAL_OFFSET rotates the drawn textures so 0 degrees points forward
     const VISUAL_OFFSET = Math.PI / 2;
+
+    // HISTORY BUFFER: This tracks exactly where the head has been
+    let pathHistory: { x: number, y: number, angle: number }[] = [];
+    const HISTORY_SPACING = 6; // How tightly the segments overlap
 
     const config: Phaser.Types.Core.GameConfig = {
       type: Phaser.AUTO,
@@ -260,94 +219,86 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
       const grid = this.add.tileSprite(1500, 1500, 3000, 3000, 'arena_default').setDepth(0);
       grid.setAlpha(0.4);
 
-      // Determine colors based on Database Skin
-      let primaryColor = 0x14532d;   // Default dark green
-      let secondaryColor = 0x16a34a; // Default bright green
-      let headBadgeColor = 0xb45309; // Default brown
-
+      // PERFECT PREMIUM COLORS
+      let colorDarkBorder = 0x215410;   // Outer dark green ridge
+      let colorBaseGreen  = 0x6ac523;   // Main vibrant green
+      let colorHighlight  = 0x9be044;   // Inner specular glow
+      
       if (dbSettings.selectedSkin === 'fire') {
-        primaryColor = 0x7f1d1d;    // Fire dark red
-        secondaryColor = 0xd97706;  // Amber flame
-        headBadgeColor = 0xfef08a;  // Bright gold crown
+        colorDarkBorder = 0x7a110d; colorBaseGreen = 0xdc3522; colorHighlight = 0xff7b54;
       } else if (dbSettings.selectedSkin === 'neon') {
-        primaryColor = 0x4c1d95;    // Cyber purple
-        secondaryColor = 0x2563eb;  // Electric Blue
-        headBadgeColor = 0xf43f5e;  // Neon Pink
+        colorDarkBorder = 0x221354; colorBaseGreen = 0x5b32d4; colorHighlight = 0xa37cf6;
       }
 
-      // TEXTURE 1: HEAD
+      // 1. GENERATE PERFECT BODY SEGMENT (Circles with glowing crescent edge)
       {
         const g = this.make.graphics({ x: 0, y: 0 }, false);
-        g.fillStyle(headBadgeColor, 1); g.fillRect(18, 28, 64, 10);
-        g.fillStyle(0xfbbf24, 1);
-        g.beginPath(); g.moveTo(18, 38); g.lineTo(24, 10); g.lineTo(36, 30); g.closePath(); g.fillPath();
-        g.beginPath(); g.moveTo(36, 38); g.lineTo(50, 4); g.lineTo(64, 38); g.closePath(); g.fillPath();
-        g.beginPath(); g.moveTo(64, 38); g.lineTo(76, 10); g.lineTo(82, 38); g.closePath(); g.fillPath();
-        g.fillStyle(0xfcd34d, 1); g.fillRect(18, 30, 64, 12);
-        g.fillStyle(0xef4444, 1); g.fillCircle(50, 34, 5);
-        g.fillStyle(0x93c5fd, 1); g.fillCircle(28, 35, 3);
-        g.fillStyle(0x6ee7b7, 1); g.fillCircle(72, 35, 3);
-
-        g.fillStyle(primaryColor, 1); g.fillEllipse(50, 80, 76, 74);
-        g.fillStyle(secondaryColor, 1); g.fillEllipse(50, 80, 68, 66);
-        g.fillStyle(0xffffff, 0.4); g.fillEllipse(50, 66, 44, 26); // shine
-
-        g.fillStyle(0xffffff, 1); g.fillCircle(30, 72, 13);
-        g.fillStyle(primaryColor, 1); g.fillCircle(30, 70, 9);
-        g.fillStyle(0x000000, 1); g.fillCircle(30, 69, 5);
-        g.fillStyle(0xffffff, 1); g.fillCircle(27, 66, 2.5);
-
-        g.fillStyle(0xffffff, 1); g.fillCircle(70, 72, 13);
-        g.fillStyle(primaryColor, 1); g.fillCircle(70, 70, 9);
-        g.fillStyle(0x000000, 1); g.fillCircle(70, 69, 5);
-        g.fillStyle(0xffffff, 1); g.fillCircle(67, 66, 2.5);
-
-        g.lineStyle(3, primaryColor, 1);
-        g.beginPath(); g.arc(30, 72, 14, Math.PI * 1.25, Math.PI * 1.75); g.strokePath();
-        g.beginPath(); g.arc(70, 72, 14, Math.PI * 1.25, Math.PI * 1.75); g.strokePath();
-
-        g.fillStyle(primaryColor, 1); g.fillEllipse(50, 98, 36, 22);
-        g.fillStyle(0x000000, 0.5); g.fillCircle(42, 96, 3.5); g.fillCircle(58, 96, 3.5);
-
-        g.lineStyle(3, primaryColor, 1); g.beginPath();
-        g.moveTo(34, 104); g.lineTo(40, 108); g.lineTo(50, 110); g.lineTo(60, 108); g.lineTo(66, 104);
+        const cx = BODY_CANVAS / 2; const cy = BODY_CANVAS / 2; const r = 32;
+        
+        // Dark outer border
+        g.fillStyle(colorDarkBorder, 1); g.fillCircle(cx, cy, r);
+        // Base color
+        g.fillStyle(colorBaseGreen, 1); g.fillCircle(cx, cy, r - 4);
+        
+        // Glossy Top-Left Crescent Highlight (Exactly like the image)
+        g.lineStyle(6, colorHighlight, 1);
+        g.beginPath();
+        g.arc(cx, cy, r - 9, Math.PI * 0.9, Math.PI * 1.7);
         g.strokePath();
-        g.generateTexture('snake_head', HEAD_CANVAS_W, HEAD_CANVAS_H);
-        g.destroy();
-      }
 
-      // TEXTURE 2: BODY SEGMENT
-      {
-        const g = this.make.graphics({ x: 0, y: 0 }, false);
-        const cx = BODY_CANVAS / 2; const cy = BODY_CANVAS / 2; const r = 30;
-        g.fillStyle(primaryColor, 1); g.fillCircle(cx, cy, r);
-        g.fillStyle(secondaryColor, 1); g.fillCircle(cx, cy, r - 3);
-        g.fillStyle(0xffffff, 0.3); g.fillCircle(cx, cy, r - 8);
-        g.fillStyle(primaryColor, 0.6);
-        g.fillEllipse(cx - 10, cy - 10, 20, 13); g.fillEllipse(cx + 10, cy - 10, 20, 13);
-        g.fillEllipse(cx, cy - 2, 22, 14);
-        g.fillEllipse(cx - 10, cy + 9, 20, 13); g.fillEllipse(cx + 10, cy + 9, 20, 13);
-        g.fillStyle(0xffffff, 0.5); g.fillEllipse(cx - 8, cy - 10, 16, 10);
-        g.lineStyle(1.5, 0xffffff, 0.3); g.beginPath(); g.arc(cx, cy, r - 2, Math.PI * 1.1, Math.PI * 1.9); g.strokePath();
         g.generateTexture('snake_body', BODY_CANVAS, BODY_CANVAS);
         g.destroy();
       }
 
-      // TEXTURE 3: TAIL
+      // 2. GENERATE PERFECT HEAD & CROWN
       {
         const g = this.make.graphics({ x: 0, y: 0 }, false);
-        g.fillStyle(primaryColor, 1); g.fillEllipse(20, 20, 38, 30);
-        g.fillStyle(secondaryColor, 1); g.fillEllipse(20, 20, 30, 22);
-        g.fillStyle(primaryColor, 0.5); g.fillEllipse(20, 16, 18, 10);
+        
+        // Base Head Shape
+        g.fillStyle(colorDarkBorder, 1); g.fillEllipse(55, 80, 76, 74);
+        g.fillStyle(colorBaseGreen, 1); g.fillEllipse(55, 80, 68, 66);
+        
+        // Crown Base & Spikes
+        g.fillStyle(0xcc8400, 1); // Dark gold edge
+        g.fillRect(23, 28, 64, 10);
+        g.fillStyle(0xffb800, 1); // Bright Gold
+        g.beginPath(); g.moveTo(23, 38); g.lineTo(29, 10); g.lineTo(41, 30); g.closePath(); g.fillPath(); // Left
+        g.beginPath(); g.moveTo(41, 38); g.lineTo(55, 4); g.lineTo(69, 38); g.closePath(); g.fillPath(); // Center
+        g.beginPath(); g.moveTo(69, 38); g.lineTo(81, 10); g.lineTo(87, 38); g.closePath(); g.fillPath(); // Right
+        g.fillStyle(0xffd233, 1); g.fillRect(23, 30, 64, 12);
+        
+        // Crown Jewels
+        g.fillStyle(0xeb1c24, 1); g.fillCircle(55, 34, 5); // Red ruby
+        g.fillStyle(0x3399ff, 1); g.fillCircle(33, 35, 3);
+        g.fillStyle(0x3399ff, 1); g.fillCircle(77, 35, 3);
+
+        // Eyes
+        g.fillStyle(0xffffff, 1); g.fillCircle(33, 72, 12); g.fillCircle(77, 72, 12);
+        g.fillStyle(0x000000, 1); g.fillCircle(33, 70, 7);  g.fillCircle(77, 70, 7);
+        g.fillStyle(0xffffff, 1); g.fillCircle(30, 67, 2.5);g.fillCircle(74, 67, 2.5); // Pupil shine
+
+        // Snout
+        g.fillStyle(colorDarkBorder, 0.4); g.fillEllipse(55, 100, 36, 22);
+        g.fillStyle(0x000000, 0.6); g.fillCircle(47, 98, 3.5); g.fillCircle(63, 98, 3.5);
+
+        g.generateTexture('snake_head', HEAD_CANVAS_W, HEAD_CANVAS_H);
+        g.destroy();
+      }
+
+      // 3. GENERATE TAIL TIP
+      {
+        const g = this.make.graphics({ x: 0, y: 0 }, false);
+        g.fillStyle(colorDarkBorder, 1); g.fillEllipse(20, 20, 38, 30);
+        g.fillStyle(colorBaseGreen, 1); g.fillEllipse(20, 20, 30, 22);
         g.generateTexture('snake_tail', 40, 40);
         g.destroy();
       }
 
-      // TEXTURE 4: TONGUE
+      // 4. GENERATE TONGUE
       {
         const g = this.make.graphics({ x: 0, y: 0 }, false);
-        g.lineStyle(4, 0xdc2626, 1); g.beginPath(); g.moveTo(15, 50); g.lineTo(15, 20); g.strokePath();
-        g.lineStyle(3, 0xdc2626, 1); g.beginPath(); g.moveTo(15, 20); g.lineTo(5, 2); g.strokePath();
+        g.lineStyle(4, 0xeb1c24, 1); g.beginPath(); g.moveTo(15, 50); g.lineTo(15, 20); g.strokePath();
+        g.lineStyle(3, 0xeb1c24, 1); g.beginPath(); g.moveTo(15, 20); g.lineTo(5, 2); g.strokePath();
         g.beginPath(); g.moveTo(15, 20); g.lineTo(25, 2); g.strokePath();
         g.generateTexture('snake_tongue', 30, 52);
         g.destroy();
@@ -386,44 +337,33 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
       tongue = this.add.sprite(1500, 1500, 'snake_tongue');
       tongue.setDepth(999); tongue.setOrigin(0.5, 1); tongue.setVisible(false);
 
-      const spawnSegment = (scene: Phaser.Scene, x: number, y: number, depth: number, index: number, total: number) => {
+      // Pre-fill history so it spawns fully extended
+      for(let i=0; i<300; i++) {
+        pathHistory.push({ x: 1500, y: 1500 + i * 4, angle: -Math.PI / 2 });
+      }
+
+      const spawnSegment = (scene: Phaser.Scene, depth: number, index: number, total: number) => {
         const isLast = index === total - 1;
-        const key = isLast ? 'snake_tail' : 'snake_body';
-        const seg = scene.add.sprite(x, y, key);
+        const seg = scene.add.sprite(1500, 1500, isLast ? 'snake_tail' : 'snake_body');
         seg.setOrigin(0.5, 0.5); seg.setDepth(depth);
-        const taperStart = total - 8;
-        let displaySize = SEG_DISPLAY;
-        if (index > taperStart) {
-          const ratio = (index - taperStart) / 8;
-          displaySize = Phaser.Math.Linear(SEG_DISPLAY, isLast ? 16 : 26, ratio);
-        }
-        seg.setDisplaySize(displaySize, displaySize);
         return seg;
       };
 
+      // Spawn initial 15 body segments
       for (let i = 0; i < 15; i++) {
-        snakeBody.push(spawnSegment(this, 1500, 1500 + (i * TARGET_SPACING), 998 - i, i, 15));
+        snakeBody.push(spawnSegment(this, 998 - i, i, 15));
       }
 
       food = this.physics.add.sprite(0, 0, 'premium_food'); food.setDepth(5);
-
-      trailEmitter = this.add.particles(0, 0, 'foodSpark', {
-        scale: { start: 0.6, end: 0 }, alpha: { start: 0.5, end: 0 },
-        lifespan: 400, tint: secondaryColor, blendMode: 'ADD',
-      });
+      trailEmitter = this.add.particles(0, 0, 'foodSpark', { scale: { start: 0.6, end: 0 }, alpha: { start: 0.5, end: 0 }, lifespan: 400, tint: colorBaseGreen, blendMode: 'ADD' });
       trailEmitter.stop();
-
       spawnFood(this);
 
-      // FIX 1: Mobile Zoom & Background Scale Fixes
+      // Mobile Scale config
       const isMobile = this.scale.width < 600;
-      
-      this.cameras.main.startFollow(head, true, 0.08, 0.08);
+      this.cameras.main.startFollow(head, true, 0.1, 0.1);
       this.cameras.main.setBounds(0, 0, 3000, 3000); 
-      // Set to a lower zoom if the screen is narrow (mobile)
       this.cameras.main.setZoom(isMobile ? 0.75 : 1.3);
-
-      // Adjust the grid pattern scale to match the new zoom level
       grid.setTileScale(isMobile ? 0.7 : 1.0);
 
       this.physics.add.overlap(head, food, () => eatFood(this), undefined, this);
@@ -433,16 +373,20 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
         isDead = false; score = 0; pendingGrowth = 0; tongueOffset = 0;
         head.setPosition(1500, 1500); currentMoveAngle = -Math.PI / 2; targetJoystickAngle = -Math.PI / 2;
         head.rotation = currentMoveAngle + VISUAL_OFFSET; head.setVisible(true);
-        head.setDisplaySize(HEAD_DISPLAY_W, HEAD_DISPLAY_H); head.clearTint();
+        head.clearTint();
+        
+        pathHistory = [];
+        for(let i=0; i<300; i++) pathHistory.push({ x: 1500, y: 1500 + i * 4, angle: -Math.PI / 2 });
+        
         snakeBody.forEach(s => s.destroy()); snakeBody = [];
         for (let i = 0; i < 15; i++) {
-          snakeBody.push(spawnSegment(this, 1500, 1500 + (i * TARGET_SPACING), 998 - i, i, 15));
+          snakeBody.push(spawnSegment(this, 998 - i, i, 15));
         }
         window.dispatchEvent(new CustomEvent('updatePhaserScore', { detail: score }));
         spawnFood(this);
       });
 
-      // POWERUPS CONFIG
+      // POWERUPS
       const handlePowerupEvent = (e: any) => {
         if (isDead) return;
         const type = e.detail;
@@ -462,7 +406,7 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
       window.addEventListener('activatePowerup', handlePowerupEvent);
       this.events.on('destroy', () => window.removeEventListener('activatePowerup', handlePowerupEvent));
 
-      // TOUCH CONTROLS
+      // JOYSTICK CONTROLS
       this.input.addPointer(2);
       joystickBase = this.add.circle(0, 0, 70, 0xffffff, 0.15).setScrollFactor(0).setDepth(3000).setVisible(false);
       joystickThumb = this.add.circle(0, 0, 35, 0xffffff, 0.4).setScrollFactor(0).setDepth(3000).setVisible(false);
@@ -505,27 +449,37 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
         currentMoveAngle += diff * 0.15;
       }
 
-      this.physics.velocityFromRotation(currentMoveAngle, BASE_SPEED * powerUpSpeedMult, (head.body as Phaser.Physics.Arcade.Body).velocity);
-      head.rotation = currentMoveAngle + VISUAL_OFFSET;
+      // ===================================================================
+      // THE ZIGZAG MAGIC (Organic Sine-Wave Slither)
+      // This applies a gentle oscillation to the head angle as it moves!
+      // ===================================================================
+      const SLITHER_INTENSITY = 0.22; // How wide the zigzag is
+      const SLITHER_SPEED = 0.007;   // How fast it wiggles
+      const slitherOffset = Math.sin(time * SLITHER_SPEED) * SLITHER_INTENSITY;
+      
+      const finalHeadAngle = currentMoveAngle + slitherOffset;
 
-      if (!isEating) {
-        if (powerUpSpeedMult > 1) {
-          head.setDisplaySize(HEAD_DISPLAY_W * 0.88, HEAD_DISPLAY_H * 1.08);
-          const tail = snakeBody[snakeBody.length - 1];
-          if (tail) trailEmitter.emitParticleAt(tail.x, tail.y);
-        } else {
-          head.setDisplaySize(HEAD_DISPLAY_W, HEAD_DISPLAY_H);
-        }
+      this.physics.velocityFromRotation(finalHeadAngle, BASE_SPEED * powerUpSpeedMult, (head.body as Phaser.Physics.Arcade.Body).velocity);
+      head.rotation = finalHeadAngle + VISUAL_OFFSET;
+
+      // ===================================================================
+      // RECORD PATH HISTORY
+      // ===================================================================
+      pathHistory.unshift({ x: head.x, y: head.y, angle: head.rotation });
+      if (pathHistory.length > 2000) pathHistory.pop(); // Keep memory clean
+
+      if (!isEating && powerUpSpeedMult > 1) {
+        const tail = snakeBody[snakeBody.length - 1];
+        if (tail) trailEmitter.emitParticleAt(tail.x, tail.y);
       }
 
       const snoutDist = HEAD_DISPLAY_H * 0.44 + tongueOffset;
-      tongue.setPosition(head.x + Math.cos(currentMoveAngle) * snoutDist, head.y + Math.sin(currentMoveAngle) * snoutDist);
-      tongue.rotation = currentMoveAngle + VISUAL_OFFSET;
+      tongue.setPosition(head.x + Math.cos(finalHeadAngle) * snoutDist, head.y + Math.sin(finalHeadAngle) * snoutDist);
+      tongue.rotation = finalHeadAngle + VISUAL_OFFSET;
 
       const foodDist = Phaser.Math.Distance.Between(head.x, head.y, food.x, food.y);
       if (foodDist < 260 && foodDist > 50 && !isFlicking && Math.random() < 0.08) flickTongue(this);
       if (Math.random() < 0.004) flickTongue(this);
-
       if (foodDist < magnetRange && !isEating) {
         const pa = Phaser.Math.Angle.Between(food.x, food.y, head.x, head.y);
         const ps = magnetRange === 500 ? 14 : 8;
@@ -533,29 +487,38 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
       }
       if (foodDist < 30 && !isEating) eatFood(this);
 
+      // ===================================================================
+      // PERFECT BODY FOLLOW (Reads from the exact path the head took)
+      // ===================================================================
       const total = snakeBody.length;
       for (let i = 0; i < total; i++) {
-        const cur = snakeBody[i]; const tgt = i === 0 ? head : snakeBody[i - 1];
-        const d = Phaser.Math.Distance.Between(cur.x, cur.y, tgt.x, tgt.y);
-        const a = Phaser.Math.Angle.Between(cur.x, cur.y, tgt.x, tgt.y);
-
-        if (d > TARGET_SPACING) {
-          cur.x = Phaser.Math.Linear(cur.x, tgt.x - Math.cos(a) * TARGET_SPACING, 0.4);
-          cur.y = Phaser.Math.Linear(cur.y, tgt.y - Math.sin(a) * TARGET_SPACING, 0.4);
+        // Multiply by spacing to push segments further back along the path
+        const historyIndex = (i + 1) * HISTORY_SPACING; 
+        
+        if (historyIndex < pathHistory.length) {
+          const pastPoint = pathHistory[historyIndex];
+          snakeBody[i].setPosition(pastPoint.x, pastPoint.y);
+          snakeBody[i].setRotation(pastPoint.angle);
         }
-        cur.rotation = a + VISUAL_OFFSET;
 
-        const taperStart = total - 8; const isLast = i === total - 1;
+        // Taper the last few segments down to a tiny tail
+        const taperStart = total - 8; 
+        const isLast = i === total - 1;
         let displaySize = SEG_DISPLAY;
         if (i >= taperStart) {
           const ratio = (i - taperStart) / 8;
           displaySize = Phaser.Math.Linear(SEG_DISPLAY, isLast ? 16 : 26, ratio);
         }
+        
+        // Stretch effect during speed boost
         const stretch = powerUpSpeedMult > 1 ? 1.08 : 1;
-        cur.setDisplaySize(displaySize * (1 / stretch), displaySize * stretch);
+        snakeBody[i].setDisplaySize(displaySize * (1 / stretch), displaySize * stretch);
 
+        // Self-collision (death)
         if (i > 15 && !isDead && !isShielded) {
-          if (Phaser.Math.Distance.Between(head.x, head.y, cur.x, cur.y) < COLLISION_RADIUS) triggerDeath(this);
+          if (Phaser.Math.Distance.Between(head.x, head.y, snakeBody[i].x, snakeBody[i].y) < COLLISION_RADIUS) {
+            triggerDeath(this);
+          }
         }
       }
 
@@ -566,13 +529,15 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
         if (foodTimer <= 0) spawnFood(this);
       }
 
+      // Grow body dynamically
       if (pendingGrowth > 0 && time % 10 < 3) {
         const last = snakeBody[snakeBody.length - 1];
         last.setTexture('snake_body'); last.setDisplaySize(26, 26);
         const newTail = this.add.sprite(last.x, last.y, 'snake_tail');
         newTail.setOrigin(0.5, 0.5); newTail.setDepth(last.depth - 1); newTail.setDisplaySize(16, 16);
         if (isShielded) newTail.setTint(0x60a5fa);
-        snakeBody.push(newTail); pendingGrowth--;
+        snakeBody.push(newTail); 
+        pendingGrowth--;
       }
 
       if (head.x <= 20 || head.x >= 2980 || head.y <= 20 || head.y >= 2980) {
@@ -602,9 +567,7 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
       }).setOrigin(0.5).setDepth(2500);
       scene.tweens.add({ targets: popup, y: popup.y - 120, alpha: 0, duration: 1000, ease: 'Cubic.out', onComplete: () => popup.destroy() });
       scene.tweens.add({ targets: head, scaleX: 1.25, scaleY: 0.85, duration: 80, yoyo: true });
-      scene.add.particles(food.x, food.y, 'foodSpark', {
-        speed: { min: 80, max: 250 }, lifespan: 400, quantity: 15, scale: { start: 0.5, end: 0 },
-      });
+      scene.add.particles(food.x, food.y, 'foodSpark', { speed: { min: 80, max: 250 }, lifespan: 400, quantity: 15, scale: { start: 0.5, end: 0 }});
       scene.tweens.add({
         targets: food, scale: 0, alpha: 0, duration: 100,
         onComplete: () => {
@@ -620,9 +583,7 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
       if (isDead) return;
       isDead = true; sfx.playDie();
       head.setVelocity(0, 0); tongue.setVisible(false);
-      scene.add.particles(head.x, head.y, 'foodSpark', {
-        speed: { min: 50, max: 300 }, lifespan: 800, quantity: 40, scale: { start: 0.8, end: 0 },
-      });
+      scene.add.particles(head.x, head.y, 'foodSpark', { speed: { min: 50, max: 300 }, lifespan: 800, quantity: 40, scale: { start: 0.8, end: 0 }});
       head.setVisible(false); snakeBody.forEach(s => s.setVisible(false));
       scene.cameras.main.shake(600, 0.04);
       scene.time.delayedCall(1000, () => {
@@ -635,7 +596,7 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
       phaserInstance.current?.destroy(true); phaserInstance.current = null;
       if (gameRef.current) gameRef.current.innerHTML = '';
     };
-  }, [isLoading, dbSettings.selectedSkin]); // Re-runs if skin changes
+  }, [isLoading, dbSettings.selectedSkin]);
 
   return (
     <div className="fixed inset-0 w-full h-[100dvh] bg-[#06090E] z-[9999] overflow-hidden select-none touch-none">
@@ -676,17 +637,10 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
         <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-4 z-10">
           <div className="flex justify-between items-start w-full mt-2">
             
-            {/* SETTINGS MENU (Top Left) */}
             <div className="pointer-events-auto flex flex-col gap-2 bg-black/50 backdrop-blur-md border border-white/10 p-2 rounded-xl text-white">
-              {/* Username Control */}
               {isEditingUsername ? (
                 <div className="flex gap-1.5">
-                  <input 
-                    type="text" 
-                    defaultValue={dbSettings.username}
-                    onChange={(e) => setTempUsername(e.target.value)}
-                    className="bg-black/60 border border-white/20 rounded-md px-2 py-0.5 text-xs text-white outline-none w-24 font-bold"
-                  />
+                  <input type="text" defaultValue={dbSettings.username} onChange={(e) => setTempUsername(e.target.value)} className="bg-black/60 border border-white/20 rounded-md px-2 py-0.5 text-xs text-white outline-none w-24 font-bold" />
                   <button onClick={handleSaveUsername} className="bg-emerald-600 px-2 py-0.5 rounded text-[10px] font-black uppercase">Save</button>
                 </div>
               ) : (
@@ -696,13 +650,11 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
                 </div>
               )}
 
-              {/* Audio Toggle (Saves to DB) */}
               <button onClick={toggleAudio} className="text-left text-xs font-bold text-gray-300 hover:text-white flex justify-between items-center w-full mt-1 border-t border-white/10 pt-2">
                 <span>Audio</span>
                 <span>{dbSettings.audioEnabled ? '🔊 ON' : '🔇 OFF'}</span>
               </button>
               
-              {/* Skin Toggle (Saves to DB) */}
               <div className="flex justify-between items-center text-xs font-bold w-full mt-1 border-t border-white/10 pt-2 text-gray-300">
                 <span>Skin</span>
                 <div className="flex gap-1">
