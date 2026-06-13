@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import * as Phaser from 'phaser';
 
 // ============================================================
+// GLOBAL CONFIGURATION CONSTANTS
+// ============================================================
+const COLLISION_RADIUS = 20; // Self-collision tolerance in pixels
+
+// ============================================================
 // AUDIO SYNTH
 // ============================================================
 class AudioSynth {
@@ -240,7 +245,7 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
         // Base color
         g.fillStyle(colorBaseGreen, 1); g.fillCircle(cx, cy, r - 4);
         
-        // Glossy Top-Left Crescent Highlight (Exactly like the image)
+        // Glossy Top-Left Crescent Highlight
         g.lineStyle(6, colorHighlight, 1);
         g.beginPath();
         g.arc(cx, cy, r - 9, Math.PI * 0.9, Math.PI * 1.7);
@@ -451,10 +456,9 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
 
       // ===================================================================
       // THE ZIGZAG MAGIC (Organic Sine-Wave Slither)
-      // This applies a gentle oscillation to the head angle as it moves!
       // ===================================================================
-      const SLITHER_INTENSITY = 0.22; // How wide the zigzag is
-      const SLITHER_SPEED = 0.007;   // How fast it wiggles
+      const SLITHER_INTENSITY = 0.22;
+      const SLITHER_SPEED = 0.007;   
       const slitherOffset = Math.sin(time * SLITHER_SPEED) * SLITHER_INTENSITY;
       
       const finalHeadAngle = currentMoveAngle + slitherOffset;
@@ -466,7 +470,7 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
       // RECORD PATH HISTORY
       // ===================================================================
       pathHistory.unshift({ x: head.x, y: head.y, angle: head.rotation });
-      if (pathHistory.length > 2000) pathHistory.pop(); // Keep memory clean
+      if (pathHistory.length > 2000) pathHistory.pop();
 
       if (!isEating && powerUpSpeedMult > 1) {
         const tail = snakeBody[snakeBody.length - 1];
@@ -488,11 +492,10 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
       if (foodDist < 30 && !isEating) eatFood(this);
 
       // ===================================================================
-      // PERFECT BODY FOLLOW (Reads from the exact path the head took)
+      // PERFECT BODY FOLLOW
       // ===================================================================
       const total = snakeBody.length;
       for (let i = 0; i < total; i++) {
-        // Multiply by spacing to push segments further back along the path
         const historyIndex = (i + 1) * HISTORY_SPACING; 
         
         if (historyIndex < pathHistory.length) {
@@ -501,7 +504,6 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
           snakeBody[i].setRotation(pastPoint.angle);
         }
 
-        // Taper the last few segments down to a tiny tail
         const taperStart = total - 8; 
         const isLast = i === total - 1;
         let displaySize = SEG_DISPLAY;
@@ -510,11 +512,10 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
           displaySize = Phaser.Math.Linear(SEG_DISPLAY, isLast ? 16 : 26, ratio);
         }
         
-        // Stretch effect during speed boost
         const stretch = powerUpSpeedMult > 1 ? 1.08 : 1;
         snakeBody[i].setDisplaySize(displaySize * (1 / stretch), displaySize * stretch);
 
-        // Self-collision (death)
+        // Self-collision checking using global COLLISION_RADIUS
         if (i > 15 && !isDead && !isShielded) {
           if (Phaser.Math.Distance.Between(head.x, head.y, snakeBody[i].x, snakeBody[i].y) < COLLISION_RADIUS) {
             triggerDeath(this);
@@ -529,7 +530,6 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
         if (foodTimer <= 0) spawnFood(this);
       }
 
-      // Grow body dynamically
       if (pendingGrowth > 0 && time % 10 < 3) {
         const last = snakeBody[snakeBody.length - 1];
         last.setTexture('snake_body'); last.setDisplaySize(26, 26);
@@ -657,42 +657,8 @@ export default function PhaserGame({ walletAddress, onGameOver, onSettingsChange
               
               <div className="flex justify-between items-center text-xs font-bold w-full mt-1 border-t border-white/10 pt-2 text-gray-300">
                 <span>Skin</span>
-                <div className="flex gap-1">
-                  <button onClick={() => changeSkin('default')} className={`w-4 h-4 rounded-full bg-green-500 ${dbSettings.selectedSkin === 'default' ? 'ring-1 ring-white' : 'opacity-50'}`}></button>
-                  <button onClick={() => changeSkin('fire')} className={`w-4 h-4 rounded-full bg-red-500 ${dbSettings.selectedSkin === 'fire' ? 'ring-1 ring-white' : 'opacity-50'}`}></button>
-                  <button onClick={() => changeSkin('neon')} className={`w-4 h-4 rounded-full bg-purple-500 ${dbSettings.selectedSkin === 'neon' ? 'ring-1 ring-white' : 'opacity-50'}`}></button>
-                </div>
+                <span className="uppercase text-[10px] text-emerald-400">{dbSettings.selectedSkin}</span>
               </div>
-            </div>
-
-            <div className="flex flex-col items-center">
-              <div className="text-[42px] font-black text-white drop-shadow-md leading-none">{currentScore}</div>
-              <div className="text-sm font-bold text-gray-300 mt-1 drop-shadow-md">Kills: <span className="text-white">{currentKills}</span></div>
-            </div>
-            
-            <div className="pointer-events-auto bg-black/50 backdrop-blur-md border border-white/10 rounded-xl p-2 w-[110px] text-white shadow-lg text-[10px]">
-              <div className="flex justify-between items-center mb-1 pb-1 border-b border-white/10 text-yellow-400 font-bold"><span>🏆 Rank</span><span>Pts</span></div>
-              <div className="flex flex-col gap-1 font-bold">
-                <div className="flex justify-between"><span className="text-gray-400 truncate w-12">1. Alpha</span><span className="text-yellow-400">1299</span></div>
-                <div className="flex justify-between text-[#4ade80] mt-1"><span className="truncate w-12">2. {dbSettings.username}</span><span>{currentScore}</span></div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex justify-end items-end w-full pb-6 pr-2">
-            <div className="flex gap-3 pointer-events-auto">
-              <button onClick={() => handleUsePowerup('speed')} className="relative w-[52px] h-[52px] rounded-full bg-black/60 backdrop-blur-md border-2 border-yellow-500/60 flex items-center justify-center shadow-[0_0_15px_rgba(234,179,8,0.3)] active:scale-90 transition-all p-2.5">
-                <img src="/assets/powerup_speed.png" alt="Speed" className={`w-full h-full object-contain ${dbSettings.inventory.speed === 0 ? 'opacity-30 grayscale' : 'drop-shadow-md'}`} />
-                <span className="absolute -top-1 -right-1 bg-black border border-white/20 text-white text-[9px] w-[22px] h-[22px] rounded-full flex items-center justify-center font-black shadow-lg">{dbSettings.inventory.speed}</span>
-              </button>
-              <button onClick={() => handleUsePowerup('shield')} className="relative w-[52px] h-[52px] rounded-full bg-black/60 backdrop-blur-md border-2 border-blue-500/60 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.3)] active:scale-90 transition-all p-2.5">
-                <img src="/assets/powerup_shield.png" alt="Shield" className={`w-full h-full object-contain ${dbSettings.inventory.shield === 0 ? 'opacity-30 grayscale' : 'drop-shadow-md'}`} />
-                <span className="absolute -top-1 -right-1 bg-black border border-white/20 text-white text-[9px] w-[22px] h-[22px] rounded-full flex items-center justify-center font-black shadow-lg">{dbSettings.inventory.shield}</span>
-              </button>
-              <button onClick={() => handleUsePowerup('magnet')} className="relative w-[52px] h-[52px] rounded-full bg-black/60 backdrop-blur-md border-2 border-purple-500/60 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)] active:scale-90 transition-all p-2.5">
-                <img src="/assets/powerup_magnet.png" alt="Magnet" className={`w-full h-full object-contain ${dbSettings.inventory.magnet === 0 ? 'opacity-30 grayscale' : 'drop-shadow-md'}`} />
-                <span className="absolute -top-1 -right-1 bg-black border border-white/20 text-white text-[9px] w-[22px] h-[22px] rounded-full flex items-center justify-center font-black shadow-lg">{dbSettings.inventory.magnet}</span>
-              </button>
             </div>
           </div>
         </div>
